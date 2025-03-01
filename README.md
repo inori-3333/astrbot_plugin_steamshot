@@ -24,6 +24,7 @@ https://store.steampowered.com/app/881020/Granblue_Fantasy_Relink/
 - selenium
 - webdriver-manager
 - beautifulsoup4
+
 但是，您应该无需手动安装任何第三方库，本插件会自动检测您的环境，并安装缺失的库。
 ## 前端使用
 无需使用任何指令，插件会自动检测对话中出现的steam商店页链接，并返回对应页面的网页截图和摘要信息。
