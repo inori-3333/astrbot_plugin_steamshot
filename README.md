@@ -37,6 +37,7 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 程序依赖以下第三方库：
 - selenium
 - webdriver-manager
+- requests
 - beautifulsoup4
 
 但是，您应该无需手动安装任何第三方库，本插件会自动检测您的环境，并安装缺失的库。
