@@ -1,122 +1,88 @@
 import subprocess
 import sys
 import ssl
-
-# 检查并安装selenium库
-
-def install_selenium():
-    try:
-        import selenium
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "selenium"])
-        import selenium
-
-
-install_selenium()
-
-def install_webdriver_manager():
-    try:
-        import webdriver_manager
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "webdriver_manager"])
-        import webdriver_manager
-
-
-install_webdriver_manager()
-
-
-import re  # 导入正则表达式模块
-# import uuid  # 导入UUID模块，用于生成唯一标识符
-from astrbot.api.event import filter, AstrMessageEvent  # 导入AstrBot的事件过滤器和消息事件类
-from astrbot.api.star import Context, Star, register  # 导入AstrBot的上下文、Star类和注册函数
-from astrbot.api import logger  # 导入日志记录器
-from astrbot.api.all import *
+import re
 import requests
-# from typing import Optional
 import os
-from bs4 import BeautifulSoup  # 导入BeautifulSoup库
-from selenium import webdriver  # 导入Selenium WebDriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-# from selenium.webdriver.chrome.options import Options
+import subprocess
+import sys
+import ssl
 
-
+# 禁用 SSL 证书验证，避免某些环境下载失败
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# 定义Steam URL的正则表达式模式
+# **自动安装指定的依赖包**
+REQUIRED_PACKAGES = [
+    "selenium",
+    "webdriver_manager",
+    "requests",
+    "beautifulsoup4"
+]
+
+def install_packages():
+    for package in REQUIRED_PACKAGES:
+        try:
+            __import__(package)  # 尝试导入
+        except ImportError:
+            print(f"📦 未找到 {package}，正在安装...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+            print(f"✅ {package} 安装成功！")
+
+# **执行安装**
+install_packages()
+
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.star import Context, Star, register
+from astrbot.api import logger
+from astrbot.api.all import *
+
+# Steam 商店和个人主页正则表达式
 STEAM_URL_PATTERN = r"https://store\.steampowered\.com/app/\d+/[\w\-]+/?"
-save_path = "./data/plugins/astrbot_plugin_steamshot/screenshots/screenshot.png"
-# current_dir = os.path.dirname(os.path.abspath(__file__))
-# crawler_path = os.path.join(current_dir, "crawler1.py")
+STEAM_PROFILE_URL_PATTERN = r"https://steamcommunity\.com/(profiles/\d{17}|id/[A-Za-z0-9\-_]+)/?"
 
-# 定义获取网页截图的函数
-# def get_webpage_screenshot(url):
-#     # API地址
-#     api_url = "https://api.pearktrue.cn/api/screenweb/"
-#     # 请求参数
-#     params = {
-#         "url": url,
-#         "type": "image",
-#     }
-#     try:
-#         # 发送GET请求
-#         response = requests.get(api_url, params=params)
-#         response.raise_for_status()  # 检查请求是否成功
-#         # 将返回的图片内容保存到本地
-#         image_data = response.content
-#         screenshot_path = f"./data/plugins/astrbot_plugin_steamshot/screenshot.png"
-#         with open(screenshot_path, "wb") as file:
-#             file.write(image_data)
-#         result = MessageChain()  # 创建消息链对象
-#         result.chain = []
-#         if screenshot_path:
-#             # result.chain.append(Plain("截图结果：\n"))  # 添加文本消息
-#             return screenshot_path
-#         else:
-#             result.chain.append(Plain("网页截图失败，请检查URL格式是否正确或稍后再试。"))  # 添加失败消息
-#             return 0
-#     except requests.exceptions.RequestException as e:
-#         print(f"请求异常: {e}")  # 打印请求异常信息
-#         return None
+# 截图保存路径
+STORE_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/store_screenshot.png"
+PROFILE_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/profile_screenshot.png"
 
-
+# **截图函数（适用于商店和个人主页）**
 def capture_screenshot(url, save_path):
+    driver = None
     try:
-        # 配置Chrome无头模式（不显示浏览器界面）
-        options = webdriver.ChromeOptions()
+        options = Options()
         options.add_argument("--headless")  # 无头模式
         options.add_argument("--disable-gpu")
         options.add_argument("--no-sandbox")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-logging", "enable-automation", "disable-usb"])  # 禁用 USB
 
-        # 自动下载并配置ChromeDriver
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=options
-        )
+        driver = webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=options)
         driver.set_window_size(1440, 1600)
-
-        # 访问URL并等待页面加载
+        driver.set_page_load_timeout(15)  # 限制页面加载时间
         driver.get(url)
-        driver.implicitly_wait(3)  # 隐式等待3秒
+        driver.implicitly_wait(5)  # 等待页面加载
 
-        # 创建保存目录（如果不存在）
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-        # 截图并保存
         driver.save_screenshot(save_path)
-        print(f"截图已保存至: {save_path}")
+        print(f"✅ 截图已保存至: {save_path}")
+        return True
 
     except Exception as e:
-        print(f"错误发生: {str(e)}")
+        print(f"❌ 截图错误: {e}")
+        return False  # 防止卡死
+
     finally:
-        driver.quit()
+        if driver:
+            driver.quit()
 
-
-# 定义下载和解析Steam网页的函数
+# **使用原来的 `get_steam_page_info(url)` 获取完整的游戏信息**
 def get_steam_page_info(url):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.5'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept-Language": "zh-CN,zh;q=0.9"  # 强制请求中文页面
     }
 
     try:
@@ -128,78 +94,118 @@ def get_steam_page_info(url):
             print("需要年龄验证，跳过此页面")
             return None
 
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        # 提取游戏信息
-        game_name = soup.find('div', class_='apphub_AppName').text.strip()
-        release_date = soup.find('div', class_='date').text.strip()
+        # 游戏名称
+        game_name = soup.find("div", class_="apphub_AppName")
+        game_name = game_name.text.strip() if game_name else "未知"
 
-        # 开发商可能有多个
-        developers = [a.text.strip() for a in soup.select('div#developers_list a')]
+        # 发行时间
+        release_date = soup.find("div", class_="date")
+        release_date = release_date.text.strip() if release_date else "未知"
 
-        # 查找发行商信息
-        publisher_div = soup.find('div', class_='dev_row')
-        if publisher_div:
-            publisher = publisher_div.find_next_sibling('div').text.strip()
-            publisher = publisher.replace("Publisher:\n\n", "")
-        else:
-            publisher = "未知"
+        # 开发商
+        developers = [a.text.strip() for a in soup.select("div#developers_list a")]
+        developers = ", ".join(developers) if developers else "未知"
+
+        # 发行商
+        publisher_div = soup.find("div", class_="dev_row")
+        publisher = publisher_div.find_next_sibling("div").text.strip() if publisher_div else "未知"
+
+        # 游戏类别（仅保留前 5 个）
+        tags = soup.select("a.app_tag")
+        tags = "，".join([tag.text.strip() for tag in tags[:5]]) if tags else "未知"
+
+        # 游戏简介（完整保留）
+        description_div = soup.find("div", class_="game_description_snippet")
+        description = description_div.text.strip() if description_div else "暂无简介"
+
+        # 评分
+        review_summary = soup.find("span", class_="game_review_summary")
+        review_summary = review_summary.text.strip() if review_summary else "暂无评分"
+
+        # 价格
+        price = soup.find("div", class_="game_purchase_price")
+        price = price.text.strip() if price else "暂无售价"
+
+        # 只判断是否支持中文
+        language_table = soup.find("table", class_="game_language_options")
+        support_chinese = "不支持中文"
+        if language_table:
+            languages = [row.find("td").text.strip() for row in language_table.find_all("tr")[1:]]
+            if any("简体中文" in lang or "繁体中文" in lang for lang in languages):
+                support_chinese = "支持中文"
 
         return {
-            '游戏名称\n': game_name,
-            '发行时间\n': release_date,
-            '开发商\n': ", ".join(developers),
-            '发行商\n': publisher
+            "游戏名称": game_name,
+            "发行时间": release_date,
+            "开发商": developers,
+            "发行商": publisher,
+            "游戏类别": tags,
+            "简介": description,
+            "评分": review_summary,
+            "价格": price,
+            "是否支持中文": support_chinese
         }
 
     except requests.exceptions.RequestException as e:
-        print(f"请求错误: {e}")
+        print(f"❌ 请求错误: {e}")
         return None
     except AttributeError as e:
-        print(f"解析错误，可能页面结构已改变: {e}")
+        print(f"❌ 解析错误，可能页面结构已改变: {e}")
         return None
 
-
-# 注册插件
-@register("astrbot_plugin_steamshot", "Inori-3333", "根据群聊中 Steam 相关链接自动发送 Steam 页面信息", "1.0.0", "https://github.com/inori-3333/astrbot_plugin_steamshot")
+# **注册插件**
+@register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "1.2.0", "https://github.com/inori-3333/astrbot_plugin_steamshot")
 class MyPlugin(Star):
     def __init__(self, context: Context):
-        super().__init__(context)  # 调用父类的构造函数
+        super().__init__(context)
 
-    # 使用正则表达式过滤Steam URL
+    # **监听 Steam 商店 URL**
     @filter.regex(STEAM_URL_PATTERN)
-    async def github_repo(self, event: AstrMessageEvent):
-        '''解析 steam 链接'''
-        msg = event.message_str  # 获取消息字符串
-        match = re.search(STEAM_URL_PATTERN, msg)  # 匹配Steam URL
-        steam_url = match.group(0)  # 获取匹配的URL
-        # result_t = get_steam_page_info(steam_url)
-        # , description = get_steam_page_info(steam_url)  # 获取Steam页面信息
-        # result_t = f"游戏标题: {title}\n游戏描述: {description}"
-        # await event.send(result_p)
-        # 运行 crawler.py 并传递歌名作为参数
-        result = MessageChain()  # 创建消息链对象
+    async def handle_steam_store(self, event: AstrMessageEvent):
+        msg = event.message_str
+        match = re.search(STEAM_URL_PATTERN, msg)
+        if match:
+            steam_url = match.group(0)
+            await self.process_steam_store(event, steam_url)
+
+    # **监听 Steam 个人主页 URL**
+    @filter.regex(STEAM_PROFILE_URL_PATTERN)
+    async def handle_steam_profile(self, event: AstrMessageEvent):
+        msg = event.message_str
+        match = re.search(STEAM_PROFILE_URL_PATTERN, msg)
+        if match:
+            profile_url = match.group(0)
+            await self.process_steam_profile(event, profile_url)
+
+    # **处理 Steam 商店**
+    async def process_steam_store(self, event: AstrMessageEvent, steam_url: str):
+        result = MessageChain()
         result.chain = []
-        try:
-            capture_screenshot(steam_url, save_path)
-            # subprocess.run(["python", "./data/plugins/astrbot_plugin_steamshot/r2.py", "--Steam_URL", steam_url])
-            if os.path.exists("./data/plugins/astrbot_plugin_steamshot/screenshots/screenshot.png"):
-                result.chain.append(Image.fromFileSystem("./data/plugins/astrbot_plugin_steamshot/screenshots/screenshot.png"))
-            else:
-                result.chain.append(Plain("网页截图失败，请检查URL格式是否正确或稍后再试。"))
-            await event.send(result)
-        except Exception as e:
-            print(f"执行r2.py错误: {e}")  # 打印执行错误信息
-            return None
+
+        capture_screenshot(steam_url, STORE_SCREENSHOT_PATH)
+        if os.path.exists(STORE_SCREENSHOT_PATH):
+            result.chain.append(Image.fromFileSystem(STORE_SCREENSHOT_PATH))
+
+        game_info = get_steam_page_info(steam_url)
+        if game_info:
+            game_info_str = "\n".join([f"{key}: {value}" for key, value in game_info.items()])
+            result.chain.append(Plain(game_info_str))
+        else:
+            result.chain.append(Plain("游戏信息抓取失败，请检查 URL 格式是否正确或稍后再试。"))
+
+        await event.send(result)
+
+    # **处理 Steam 个人主页**
+    async def process_steam_profile(self, event: AstrMessageEvent, profile_url: str):
+        result = MessageChain()
         result.chain = []
-        try:
-            game_info = get_steam_page_info(steam_url)
-            if game_info:
-                game_info_str = "\n".join([f"{key}: {value}" for key, value in game_info.items()])
-                result.chain.append(Plain(game_info_str))
-            else:
-                result.chain.append(Plain("摘要抓取失败，请检查URL格式是否正确或稍后再试。"))  # 添加失败消息
-            await event.send(result)
-        except requests.exceptions.RequestException as e:
-            print(f"请求异常: {e}")  # 打印请求异常信息
-            return None
+
+        capture_screenshot(profile_url, PROFILE_SCREENSHOT_PATH)
+        if os.path.exists(PROFILE_SCREENSHOT_PATH):
+            result.chain.append(Image.fromFileSystem(PROFILE_SCREENSHOT_PATH))
+        else:
+            result.chain.append(Plain("个人主页截图失败，请检查 URL 格式是否正确或稍后再试。"))
+
+        await event.send(result)
