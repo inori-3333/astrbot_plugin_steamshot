@@ -36,7 +36,7 @@ STORE_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/sto
 PROFILE_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/profile_screenshot.png"
 
 # **🔹 指定 ChromeDriver 路径**
-MANUAL_CHROMEDRIVER_PATH = r"D:\astbot\AstrBot\data\plugins\astrbot_plugin_steamshot\chromedriver.exe"
+MANUAL_CHROMEDRIVER_PATH = r""
 CHROMEDRIVER_PATH_FILE = "./chromedriver_path.txt"
 
 def get_stored_chromedriver():
