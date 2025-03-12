@@ -57,9 +57,9 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 + 对游戏商店页内容更详细的解析（返回文本）
 
 ## v1.3.0
-+修复了发行商异常换行
-+自动获取ChromeDriver
-+异步运行，防止因网络原因卡死astrbot，失败时自动重试
++ 修复了发行商异常换行
++ 自动获取ChromeDriver
++ 异步运行，防止因网络原因卡死astrbot，失败时自动重试
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
