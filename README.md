@@ -1,4 +1,4 @@
-# Check Steam-Link
+# Check Steam-Link V1.3.0
 
 一个AstrBot插件。
 A plugin for AstrBot.
@@ -50,6 +50,16 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 # 使用示例
 ![使用示例](sample.png)
 ![使用示例2](sample2.png)
+
+# 更新记录
+## v1.2.0
++ 对steam个人主页链接的监听（返回个人主页截图）
++ 对游戏商店页内容更详细的解析（返回文本）
+
+## v1.3.0
++修复了发行商异常换行
++自动获取ChromeDriver
++异步运行，防止因网络原因卡死astrbot，失败时自动重试
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
