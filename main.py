@@ -164,7 +164,7 @@ async def get_steam_page_info(url):
             review_summary = soup.find("span", class_="game_review_summary")
             review_summary = review_summary.text.strip() if review_summary else "暂无评分"
 
-            price = soup.find("div", class_="game_purchase_price")
+            price = soup.find("div", class_="discount_final_price") or soup.find("div", class_="game_purchase_price")
             price = price.text.strip() if price else "暂无售价"
 
             return {
