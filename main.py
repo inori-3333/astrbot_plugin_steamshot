@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import os
+import time
 
 def install_missing_packages():
     required_packages = ["selenium", "requests", "bs4", "webdriver-manager"]
@@ -92,12 +93,11 @@ def create_driver():
     return webdriver.Chrome(service=service, options=options)
 
 async def capture_screenshot(url, save_path):
-    """ 截取网页截图 """
+    """ 截取网页完整截图（支持懒加载内容） """
     def run():
         driver = None
         try:
             driver = create_driver()
-            driver.set_window_size(1440, 1600)
             driver.set_page_load_timeout(15)
 
             for attempt in range(3):
@@ -108,6 +108,21 @@ async def capture_screenshot(url, save_path):
                     print(f"⚠️ 第 {attempt + 1} 次刷新页面...")
                     driver.refresh()
 
+            # 等待页面初步加载完成
+            time.sleep(1.5)
+
+            # 自动滚动以触发懒加载
+            last_height = driver.execute_script("return document.body.scrollHeight")
+            while True:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(2)  # 等待内容加载，可视页面内容调整
+                new_height = driver.execute_script("return document.body.scrollHeight")
+                if new_height == last_height:
+                    break
+                last_height = new_height
+
+            # 设置窗口为整页高度以便完整截图
+            driver.set_window_size(1440, last_height)
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             driver.save_screenshot(save_path)
             print(f"✅ 截图已保存: {save_path}")
