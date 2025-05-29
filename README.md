@@ -65,7 +65,7 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 + 修复了打折游戏价格无法正常显示的bug
 + 支持steam网页完整截图
 
-# v1.4.5
+## v1.4.5
 + 支持绕过steam年龄验证界面
 
 # 支持
