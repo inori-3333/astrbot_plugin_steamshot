@@ -23,6 +23,9 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
@@ -92,6 +95,40 @@ def create_driver():
 
     return webdriver.Chrome(service=service, options=options)
 
+def bypass_steam_age_check(driver):
+    """
+    自动处理 Steam 年龄验证页面。如果当前页面是年龄验证页，填写出生日期并跳转。
+    """
+    try:
+        if "agecheck" not in driver.current_url:
+            return  # 不是年龄验证页面，直接返回
+
+        print("🔞 检测到 Steam 年龄验证页面，正在自动跳过...")
+
+        # 等待出生日期下拉框出现
+        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.ID, "ageYear")))
+
+        # 选择出生日期
+        Select(driver.find_element(By.ID, "ageYear")).select_by_visible_text("2000")
+
+        # 保存跳转前的 URL
+        before_url = driver.current_url
+
+        # 尝试执行 JS 跳转函数
+        driver.execute_script("ViewProductPage()")
+
+        # 等待 URL 发生变化，表示跳转成功
+        WebDriverWait(driver, 10).until(EC.url_changes(before_url))
+        print("✅ 已跳转至游戏页面")
+
+        # 再等待游戏名称加载出来
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "apphub_AppName"))
+        )
+
+    except Exception as e:
+        print(f"⚠️ Steam 年龄验证跳过失败: {e}")
+
 async def capture_screenshot(url, save_path):
     """ 截取网页完整截图（支持懒加载内容） """
     def run():
@@ -103,13 +140,14 @@ async def capture_screenshot(url, save_path):
             for attempt in range(3):
                 try:
                     driver.get(url)
+                    bypass_steam_age_check(driver)
                     break
                 except Exception:
                     print(f"⚠️ 第 {attempt + 1} 次刷新页面...")
                     driver.refresh()
 
             # 等待页面初步加载完成
-            time.sleep(1.5)
+            time.sleep(2)
 
             # 自动滚动以触发懒加载
             last_height = driver.execute_script("return document.body.scrollHeight")
@@ -145,6 +183,7 @@ async def get_steam_page_info(url):
             for attempt in range(3):
                 try:
                     driver.get(url)
+                    bypass_steam_age_check(driver)
                     break
                 except Exception:
                     print(f"⚠️ 第 {attempt + 1} 次刷新页面...")
