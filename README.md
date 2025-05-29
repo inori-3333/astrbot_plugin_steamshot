@@ -61,5 +61,12 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 + 自动获取ChromeDriver
 + 异步运行，防止因网络原因卡死astrbot，失败时自动重试
 
+## v1.4.0
++ 修复了打折游戏价格无法正常显示的bug
++ 支持steam网页完整截图
+
+# v1.4.5
++ 支持绕过steam年龄验证界面
+
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
