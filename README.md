@@ -1,4 +1,4 @@
-# Check Steam-Link V1.3.0
+# Check Steam-Link V1.4.5
 
 一个AstrBot插件。
 A plugin for AstrBot.
