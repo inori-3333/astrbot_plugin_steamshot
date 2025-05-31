@@ -255,10 +255,139 @@ async def process_steam_store(event, steam_url):
 
     await event.send(result)
 
+async def get_steam_profile_info(url):
+    """ 解析 Steam 个人主页信息 """
+    def parse():
+        driver = create_driver()
+        try:
+            driver.set_page_load_timeout(15)
+            driver.get(url)
+            bypass_steam_age_check(driver)
+            time.sleep(2)  # 等待页面渲染完整
+
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            info = []
+
+            # 1. 解析 Steam ID
+            name_span = soup.find("span", class_="actual_persona_name")
+            if name_span:
+                steam_id = name_span.text.strip()
+                info.append(f"steam id: {steam_id}")
+
+            # 2. 检查是否为私密主页
+            if soup.find("div", class_="profile_private_info"):
+                info.append("个人简介: 此个人资料是私密的。")
+                return info
+
+            # 3. 解析个人简介
+            summary = soup.find("div", class_="profile_summary")
+            if summary:
+                # 移除图片和链接，仅保留文字
+                for tag in summary.find_all(["img", "a"]):
+                    tag.decompose()
+                profile_text = summary.get_text(separator="\n", strip=True)
+                if profile_text:
+                    info.append(f"个人简介: {profile_text}")
+            else:
+                pass  # 没有简介，继续解析下方内容
+
+            # 4. 解析 Steam 等级
+            level_span = soup.find("span", class_="friendPlayerLevelNum")
+            if level_span:
+                level = level_span.text.strip()
+                info.append(f"steam等级: {level}")
+
+            # 5. 解析地区
+            location_div = soup.find("div", class_="header_location")
+            if location_div:
+                location_text = location_div.get_text(strip=True)
+                if location_text:
+                    info.append(f"地区: {location_text}")
+
+            # 6. 解析当前状态
+            status_div = soup.find("div", class_="responsive_status_info")
+            if status_div:
+                status_header = status_div.find("div", class_="profile_in_game_header")
+                if status_header:
+                    status = status_header.text.strip()
+                    if status == "当前离线":
+                        info.append("当前状态: 当前离线")
+                    elif status == "当前在线":
+                        info.append("当前状态: 当前在线")
+                    elif status == "当前正在游戏":
+                        game_name_div = status_div.find("div", class_="profile_in_game_name")
+                        game_name = game_name_div.text.strip() if game_name_div else "未知游戏"
+                        info.append(f"当前状态: 当前正在游戏 {game_name}")
+
+            # 7. 解析游戏数
+            game_count = None
+            for link in soup.find_all("a", href=True):
+                if "games/?tab=all" in link["href"]:
+                    count_span = link.find("span", class_="profile_count_link_total")
+                    if count_span:
+                        game_count = count_span.text.strip()
+                        if game_count:
+                            info.append(f"游戏数: {game_count}")
+                    break
+
+            # 8. 解析好友数
+            for link in soup.find_all("a", href=True):
+                if "/friends/" in link["href"]:
+                    count_span = link.find("span", class_="profile_count_link_total")
+                    if count_span:
+                        friend_count = count_span.text.strip()
+                        if friend_count:
+                            info.append(f"好友数: {friend_count}")
+                    break
+
+            return info
+
+        finally:
+            driver.quit()
+
+    return await asyncio.to_thread(parse)
+
 async def process_steam_profile(event, profile_url):
     """ 处理 Steam 个人主页 """
     result = MessageChain()
-    await capture_screenshot(profile_url, PROFILE_SCREENSHOT_PATH)
+
+    info_task = asyncio.create_task(get_steam_profile_info(profile_url))
+    screenshot_task = asyncio.create_task(capture_screenshot(profile_url, PROFILE_SCREENSHOT_PATH))
+
+    await asyncio.gather(info_task, screenshot_task)
+    profile_info = await info_task
+
+    # 表情映射
+    emoji_map = {
+        "steam id": "🆔",
+        "个人简介": "📝",
+        "steam等级": "🎖",
+        "地区": "📍",
+        "当前状态: 当前在线": "🟢",
+        "当前状态: 当前离线": "🔴",
+        "当前状态: 当前正在游戏": "🎮",
+        "游戏数": "🎮",
+        "好友数": "👥",
+        "此个人资料是私密的": "🔒"
+    }
+
+    formatted_lines = []
+    for line in profile_info:
+        key = line.split(":")[0].strip()
+        matched_emoji = None
+
+        for k, emoji in emoji_map.items():
+            if line.startswith(k) or k in line:
+                matched_emoji = emoji
+                break
+
+        if matched_emoji:
+            formatted_lines.append(f"{matched_emoji} {line}")
+        else:
+            formatted_lines.append(line)
+
+    if formatted_lines:
+        result.chain.append(Plain("\n".join(formatted_lines)))
 
     if os.path.exists(PROFILE_SCREENSHOT_PATH):
         result.chain.append(Image.fromFileSystem(PROFILE_SCREENSHOT_PATH))
