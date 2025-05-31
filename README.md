@@ -1,4 +1,4 @@
-# Check Steam-Link V1.4.5
+# Check Steam-Link V1.5.0
 
 一个AstrBot插件。
 A plugin for AstrBot.
@@ -67,6 +67,9 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 
 ## v1.4.5
 + 支持绕过steam年龄验证界面
+
+## v1.5.0
++ 新增支持steam主页解析功能
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
