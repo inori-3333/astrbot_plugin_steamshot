@@ -355,96 +355,160 @@ async def process_steam_store(event, steam_url):
     await event.send(result)
 
 async def get_steam_profile_info(url):
-    """ 解析 Steam 个人主页信息 """
+    """ 解析 Steam 个人主页信息（支持完整最新动态） """
     def parse():
         driver = create_driver()
+        if not driver:
+            return []
+
+        standard_profile_lines = []
+        recent_activity_parsed_lines = []
+
         try:
             driver.set_page_load_timeout(15)
             driver.get(url)
-            bypass_steam_age_check(driver)
-            time.sleep(2)  # 等待页面渲染完整
+            time.sleep(2)
 
             soup = BeautifulSoup(driver.page_source, "html.parser")
-            info = []
 
-            # 1. 解析 Steam ID
+            # 1. Steam ID
             name_span = soup.find("span", class_="actual_persona_name")
             if name_span:
                 steam_id = name_span.text.strip()
-                info.append(f"steam id: {steam_id}")
+                standard_profile_lines.append(f"steam id: {steam_id}")
 
-            # 2. 检查是否为私密主页
+            # 2. 私密资料判断
+            is_private = False
             if soup.find("div", class_="profile_private_info"):
-                info.append("个人简介: 此个人资料是私密的。")
-                return info
+                standard_profile_lines.append("此个人资料是私密的")
+                is_private = True
 
-            # 3. 解析个人简介
-            summary = soup.find("div", class_="profile_summary")
-            if summary:
-                # 移除图片和链接，仅保留文字
-                for tag in summary.find_all(["img", "a"]):
-                    tag.decompose()
-                profile_text = summary.get_text(separator="\n", strip=True)
-                if profile_text:
-                    info.append(f"个人简介: {profile_text}")
-            else:
-                pass  # 没有简介，继续解析下方内容
+            # 3. 简介
+            if not is_private:
+                summary_div = soup.find("div", class_="profile_summary")
+                if summary_div:
+                    for tag in summary_div.find_all(["img"]):
+                        tag.decompose()
+                    profile_text = summary_div.get_text(separator="\n", strip=True)
+                    if profile_text:
+                        standard_profile_lines.append(f"个人简介: \n{profile_text}")
 
-            # 4. 解析 Steam 等级
+            # 4. 等级
             level_span = soup.find("span", class_="friendPlayerLevelNum")
             if level_span:
-                level = level_span.text.strip()
-                info.append(f"steam等级: {level}")
+                standard_profile_lines.append(f"steam等级: {level_span.text.strip()}")
 
-            # 5. 解析地区
+            # 5. 地区
             location_div = soup.find("div", class_="header_location")
             if location_div:
-                location_text = location_div.get_text(strip=True)
-                if location_text:
-                    info.append(f"地区: {location_text}")
+                standard_profile_lines.append(f"地区: {location_div.get_text(strip=True)}")
 
-            # 6. 解析当前状态
+            # 6. 当前状态
             status_div = soup.find("div", class_="responsive_status_info")
             if status_div:
-                status_header = status_div.find("div", class_="profile_in_game_header")
-                if status_header:
-                    status = status_header.text.strip()
-                    if status == "当前离线":
-                        info.append("当前状态: 当前离线")
-                    elif status == "当前在线":
-                        info.append("当前状态: 当前在线")
-                    elif status == "当前正在游戏":
+                header = status_div.find("div", class_="profile_in_game_header")
+                if header:
+                    state = header.text.strip()
+                    if state == "当前离线":
+                        standard_profile_lines.append("当前状态: 当前离线")
+                    elif state == "当前在线":
+                        standard_profile_lines.append("当前状态: 当前在线")
+                    elif state == "当前正在游戏":
                         game_name_div = status_div.find("div", class_="profile_in_game_name")
                         game_name = game_name_div.text.strip() if game_name_div else "未知游戏"
-                        info.append(f"当前状态: 当前正在游戏 {game_name}")
+                        standard_profile_lines.append(f"当前状态: 当前正在游戏 \n                     {game_name}")
 
-            # 7. 解析游戏数
-            game_count = None
+            # 7. 游戏数
             for link in soup.find_all("a", href=True):
                 if "games/?tab=all" in link["href"]:
                     count_span = link.find("span", class_="profile_count_link_total")
                     if count_span:
-                        game_count = count_span.text.strip()
-                        if game_count:
-                            info.append(f"游戏数: {game_count}")
+                        standard_profile_lines.append(f"游戏数: {count_span.text.strip()}")
                     break
 
-            # 8. 解析好友数
+            # 8. 好友数
             for link in soup.find_all("a", href=True):
-                if "/friends/" in link["href"]:
+                if link["href"].endswith("/friends/"):
                     count_span = link.find("span", class_="profile_count_link_total")
                     if count_span:
-                        friend_count = count_span.text.strip()
-                        if friend_count:
-                            info.append(f"好友数: {friend_count}")
+                        standard_profile_lines.append(f"好友数: {count_span.text.strip()}")
                     break
 
-            return info
+            # 9. 最新动态
+            if not is_private:
+                recent_activity_customization_div = None
+                customization_divs = soup.find_all("div", class_="profile_customization")
+                for div_block in customization_divs:
+                    header = div_block.find("div", class_="profile_recentgame_header")
+                    if header and "最新动态" in header.get_text(strip=True):
+                        recent_activity_customization_div = div_block
+                        break
+
+                if recent_activity_customization_div:
+                    playtime_header = recent_activity_customization_div.find("div", class_="profile_recentgame_header")
+                    if playtime_header:
+                        playtime_recent_div = playtime_header.find("div", class_="recentgame_recentplaytime")
+                        if playtime_recent_div:
+                            playtime_text_container = playtime_recent_div.find("div")
+                            if playtime_text_container:
+                                playtime = playtime_text_container.text.strip()
+                                if playtime:
+                                    recent_activity_parsed_lines.append(f"🕒 最新动态: {playtime}")
+
+                    recent_games_block = recent_activity_customization_div.find("div", class_="recent_games")
+                    if recent_games_block:
+                        for game_div in recent_games_block.find_all("div", class_="recent_game", limit=3):
+                            game_name_tag = game_div.find("div", class_="game_name")
+                            game_name = game_name_tag.find("a", class_="whiteLink").text.strip() if game_name_tag and game_name_tag.find("a") else "未知游戏"
+
+                            game_info_details_div = game_div.find("div", class_="game_info_details")
+                            total_playtime = "未知总时数"
+                            last_played = None
+                            is_currently_playing = False
+
+                            if game_info_details_div:
+                                details_texts = [item.strip() for item in game_info_details_div.contents if isinstance(item, str) and item.strip()]
+                                for part in details_texts:
+                                    if part.startswith("总时数"):
+                                        total_playtime = part
+                                    elif part.startswith("最后运行日期："):
+                                        last_played = part
+                                    elif part == "当前正在游戏":
+                                        is_currently_playing = True
+
+                            recent_activity_parsed_lines.append(f"\n🎮 {game_name}: {total_playtime}")
+                            if is_currently_playing:
+                                recent_activity_parsed_lines.append(f"🎮 当前正在游戏")
+                            elif last_played:
+                                recent_activity_parsed_lines.append(f"📅 {last_played}")
+
+                            ach_str = None
+                            stats_div = game_div.find("div", class_="game_info_stats")
+                            if stats_div:
+                                ach_area = stats_div.find("div", class_="game_info_achievements_summary_area")
+                                if ach_area:
+                                    summary_span = ach_area.find("span", class_="game_info_achievement_summary")
+                                    if summary_span:
+                                        ach_text_tag = summary_span.find("a", class_="whiteLink")
+                                        ach_progress_tag = summary_span.find("span", class_="ellipsis")
+                                        if ach_text_tag and "成就进度" in ach_text_tag.text and ach_progress_tag:
+                                            ach_str = f"🏆 {ach_text_tag.text.strip()}  {ach_progress_tag.text.strip()}"
+                            if ach_str:
+                                recent_activity_parsed_lines.append(f"{ach_str}")
+
+            return standard_profile_lines + recent_activity_parsed_lines
+
+        except Exception as e:
+            print(f"❌ 解析 Steam 个人主页错误: {e}")
+            combined_on_error = standard_profile_lines + recent_activity_parsed_lines
+            return combined_on_error if combined_on_error else ["⚠️ 无法获取个人主页部分信息。"]
 
         finally:
-            driver.quit()
+            if driver:
+                driver.quit()
 
     return await asyncio.to_thread(parse)
+
 
 async def process_steam_profile(event, profile_url):
     """ 处理 Steam 个人主页 """

@@ -1,4 +1,4 @@
-# Check Steam-Link V1.5.0
+# Check Steam-Link V1.5.1
 
 一个AstrBot插件。
 A plugin for AstrBot.
@@ -29,6 +29,7 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 - 返回更更详细的商店页文字信息。
 - 返回与链接游戏相关的其他信息，比如从SteamDB获取的价格变化等等。
 - 支持参数设置，比如是否需要返回截图，截屏的宽度和高度，返回摘要的详细等级等等。
+- 支持解析steam个人隐私允许条件下的所有steam好友的状态，比如好友是否在线，好友正在玩什么游戏等等。
 
 # 使用方法
 ## 软件依赖
@@ -70,6 +71,11 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 
 ## v1.5.0
 + 新增支持steam主页解析功能
+
+## v1.5.1
++ 支持解析steam主页最新动态，并改善排版
++ 支持解析steam个人简介中的链接（之前考虑到可能会有些不良链接，不过现在还是觉得应该问题不大，还是放出来了）
+![使用示例3](sample3.png)
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
