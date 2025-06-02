@@ -31,13 +31,15 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api.all import *
 
-# **🔹 Steam 商店 & 个人主页匹配正则**
+# **🔹 Steam 链接匹配正则**
 STEAM_URL_PATTERN = r"https://store\.steampowered\.com/app/(\d+)/[\w\-]+/?"
 STEAM_PROFILE_URL_PATTERN = r"https://steamcommunity\.com/(profiles/\d{17}|id/[A-Za-z0-9\-_]+)/?"
+STEAM_WORKSHOP_URL_PATTERN = r"https://steamcommunity\.com/(sharedfiles/filedetails|workshop/filedetails)/\?id=(\d+)"
 
 # **🔹 截图路径**
 STORE_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/store_screenshot.png"
 PROFILE_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/profile_screenshot.png"
+WORKSHOP_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/workshop_screenshot.png"
 
 # **🔹 指定 ChromeDriver 路径**
 MANUAL_CHROMEDRIVER_PATH = r""
@@ -173,6 +175,103 @@ async def capture_screenshot(url, save_path):
                 driver.quit()
 
     await asyncio.to_thread(run)
+
+async def get_steam_workshop_info(url):
+    """ 解析 Steam 创意工坊页面信息 """
+    def parse():
+        driver = create_driver()
+        try:
+            driver.set_page_load_timeout(15)
+            for attempt in range(3):
+                try:
+                    driver.get(url)
+                    bypass_steam_age_check(driver)
+                    break
+                except Exception:
+                    print(f"⚠️ 第 {attempt + 1} 次刷新页面...")
+                    driver.refresh()
+
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            
+            info = {}
+
+            # 1. 获取模组名称
+            title = soup.find("div", class_="workshopItemTitle")
+            info["🛠️ 模组名称"] = title.text.strip() if title else "未知"
+
+            # 2. 获取作者信息 - 精确提取作者名
+            author_block = soup.find("div", class_="friendBlockContent")
+            if author_block:
+                # 获取第一个文本节点（作者名）
+                author_name = next((text for text in author_block.stripped_strings), "未知").split('\n')[0]
+                info["👤 作者"] = author_name.strip()
+                
+                # 尝试获取作者链接
+                author_link = author_block.find("a")
+                if author_link:
+                    author_href = author_link["href"]
+                    if not author_href.startswith("http"):
+                        author_href = "https://steamcommunity.com" + author_href
+                    info["🔗 作者主页"] = author_href
+                else:
+                    # 如果没有链接，尝试从作者名构造个人资料链接
+                    if author_name and author_name != "未知":
+                        info["🔗 作者主页"] = f"https://steamcommunity.com/id/{author_name}"
+            else:
+                info["👤 作者"] = "未知"
+
+            # 3. 获取订阅数 - 更可靠的查找方式
+            subscribers = soup.find("div", class_="numSubscribers") or \
+                        soup.find("div", class_="detailsStatRight", string=re.compile(r"\d+(\,\d+)*"))
+            info["📊 订阅数"] = subscribers.text.strip() if subscribers else "未知"
+
+            # 4. 获取详细信息（大小、创建日期）
+            stats_container = soup.find("div", class_="detailsStatsContainerRight")
+            if stats_container:
+                stats_items = stats_container.find_all("div", class_="detailsStatRight")
+                if len(stats_items) >= 1:
+                    info["📦 文件大小"] = stats_items[0].text.strip()
+                if len(stats_items) >= 2:
+                    info["🗓️ 创建日期"] = stats_items[1].text.strip()
+                # 有些页面可能没有更新日期
+                if len(stats_items) >= 3:
+                    info["🔄 更新日期"] = stats_items[2].text.strip()
+
+            return info
+
+        finally:
+            driver.quit()
+
+    return await asyncio.to_thread(parse)
+
+
+async def process_steam_workshop(event, workshop_url):
+    """ 处理 Steam 创意工坊链接 """
+    result = MessageChain()
+
+    info_task = asyncio.create_task(get_steam_workshop_info(workshop_url))
+    screenshot_task = asyncio.create_task(capture_screenshot(workshop_url, WORKSHOP_SCREENSHOT_PATH))
+
+    await asyncio.gather(info_task, screenshot_task)
+    workshop_info = await info_task
+
+    # 格式化输出信息
+    formatted_info = []
+    for key, value in workshop_info.items():
+        if key in ["🔗 作者主页", "🎮 所属游戏"]:
+            # 这些字段已经包含完整URL，直接显示
+            formatted_info.append(f"{key}: {value}")
+        else:
+            formatted_info.append(f"{key}: {value}")
+
+    if formatted_info:
+        result.chain.append(Plain("\n".join(formatted_info)))
+
+    if os.path.exists(WORKSHOP_SCREENSHOT_PATH):
+        result.chain.append(Image.fromFileSystem(WORKSHOP_SCREENSHOT_PATH))
+
+    await event.send(result)
+
 
 async def get_steam_page_info(url):
     """ 解析 Steam 商店页面信息 """
@@ -408,3 +507,10 @@ class SteamPlugin(Star):
     async def handle_steam_profile(self, event: AstrMessageEvent):
         profile_url = re.search(STEAM_PROFILE_URL_PATTERN, event.message_str).group(0)
         await process_steam_profile(event, profile_url)
+
+    @filter.regex(STEAM_WORKSHOP_URL_PATTERN)
+    async def handle_steam_workshop(self, event: AstrMessageEvent):
+        match = re.search(STEAM_WORKSHOP_URL_PATTERN, event.message_str)
+        workshop_id = match.group(2)
+        workshop_url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
+        await process_steam_workshop(event, workshop_url)
