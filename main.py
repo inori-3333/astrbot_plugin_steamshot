@@ -246,48 +246,96 @@ async def get_steam_workshop_info(url):
             soup = BeautifulSoup(driver.page_source, "html.parser")
             
             info = {}
+            
+            # 0. 获取游戏名称和链接
+            breadcrumbs = soup.find("div", class_="breadcrumbs")
+            if breadcrumbs:
+                game_link = breadcrumbs.find("a")
+                if game_link:
+                    info["🎮 所属游戏"] = game_link.text.strip()
+                    game_href = game_link["href"]
+                    if not game_href.startswith("http"):
+                        game_href = "https://steamcommunity.com" + game_href
+                    info["🔗 游戏链接"] = game_href
 
             # 1. 获取模组名称
             title = soup.find("div", class_="workshopItemTitle")
             info["🛠️ 模组名称"] = title.text.strip() if title else "未知"
 
-            # 2. 获取作者信息 - 精确提取作者名
-            author_block = soup.find("div", class_="friendBlockContent")
-            if author_block:
-                # 获取第一个文本节点（作者名）
-                author_name = next((text for text in author_block.stripped_strings), "未知").split('\n')[0]
-                info["👤 作者"] = author_name.strip()
-                
-                # 尝试获取作者链接
-                author_link = author_block.find("a")
+            # 2. 获取作者信息和真实主页链接
+            creator_block = soup.find("div", class_="creatorsBlock")
+            if creator_block:
+                author_name = next((text for text in creator_block.stripped_strings if text.strip()), "未知")
+                author_link = creator_block.find("a")
                 if author_link:
+                    info["👤 作者"] = author_name.split('\n')[0].strip()
                     author_href = author_link["href"]
                     if not author_href.startswith("http"):
                         author_href = "https://steamcommunity.com" + author_href
                     info["🔗 作者主页"] = author_href
-                else:
-                    # 如果没有链接，尝试从作者名构造个人资料链接
-                    if author_name and author_name != "未知":
-                        info["🔗 作者主页"] = f"https://steamcommunity.com/id/{author_name}"
-            else:
-                info["👤 作者"] = "未知"
+                    
+                    status = creator_block.find("span", class_="friendSmallText")
+                    if status:
+                        info["🟢 作者状态"] = status.text.strip()
 
-            # 3. 获取订阅数 - 更可靠的查找方式
-            subscribers = soup.find("div", class_="numSubscribers") or \
-                        soup.find("div", class_="detailsStatRight", string=re.compile(r"\d+(\,\d+)*"))
-            info["📊 订阅数"] = subscribers.text.strip() if subscribers else "未知"
+            # 3. 获取评分信息
+            rating_section = soup.find("div", class_="ratingSection")
+            if rating_section:
+                rating_img = rating_section.find("img")
+                if rating_img:
+                    info["⭐ 评分"] = rating_img["src"].split("/")[-1].split("_")[0] + " stars"
+                num_ratings = rating_section.find("div", class_="numRatings")
+                if num_ratings:
+                    info["📈 评分数量"] = num_ratings.text.strip()
 
-            # 4. 获取详细信息（大小、创建日期）
-            stats_container = soup.find("div", class_="detailsStatsContainerRight")
-            if stats_container:
-                stats_items = stats_container.find_all("div", class_="detailsStatRight")
+            # 4. 获取统计数据（访客、订阅、收藏）
+            stats_table = soup.find("table", class_="stats_table")
+            if stats_table:
+                for row in stats_table.find_all("tr"):
+                    cells = row.find_all("td")
+                    if len(cells) == 2:
+                        value = cells[0].text.strip()
+                        label = cells[1].text.strip()
+                        
+                        if "Unique Visitors" in label:
+                            info["👀 访客数"] = value
+                        elif "Current Subscribers" in label:
+                            info["📊 订阅数"] = value
+                        elif "Current Favorites" in label:
+                            info["❤️ 收藏数"] = value
+
+            # 5. 获取文件大小和日期信息
+            stats_right = soup.find("div", class_="detailsStatsContainerRight")
+            if stats_right:
+                stats_items = stats_right.find_all("div", class_="detailsStatRight")
                 if len(stats_items) >= 1:
                     info["📦 文件大小"] = stats_items[0].text.strip()
                 if len(stats_items) >= 2:
                     info["🗓️ 创建日期"] = stats_items[1].text.strip()
-                # 有些页面可能没有更新日期
                 if len(stats_items) >= 3:
                     info["🔄 更新日期"] = stats_items[2].text.strip()
+
+            # 6. 获取标签信息
+            tags_container = soup.find("div", class_="rightDetailsBlock")
+            if tags_container:
+                tags = []
+                for tag_div in tags_container.find_all("div", class_="workshopTags"):
+                    tag_title = tag_div.find("span", class_="workshopTagsTitle")
+                    if tag_title:
+                        tag_text = tag_title.text.replace(":", "").strip()
+                        tag_links = [a.text for a in tag_div.find_all("a")]
+                        if tag_links:
+                            tags.append(f"{tag_text}: {', '.join(tag_links)}")
+                if tags:
+                    info["🏷️ 标签"] = "\n".join(tags)
+
+            # 7. 获取描述内容
+            description = soup.find("div", class_="workshopItemDescription")
+            if description:
+                for tag in description.find_all(["script", "style", "img", "a"]):
+                    tag.decompose()
+                desc_text = description.get_text(separator="\n", strip=True)
+                info["📝 描述"] = desc_text[:500] + "..." if len(desc_text) > 500 else desc_text
 
             return info
 
@@ -307,14 +355,26 @@ async def process_steam_workshop(event, workshop_url):
     await asyncio.gather(info_task, screenshot_task)
     workshop_info = await info_task
 
-    # 格式化输出信息
     formatted_info = []
+    
+    # 优先显示游戏信息
+    if "🎮 所属游戏" in workshop_info:
+        game_info = f"游戏名称: {workshop_info['🎮 所属游戏']}"
+        if "🔗 游戏链接" in workshop_info:
+            game_info += f" {workshop_info['🔗 游戏链接']}"
+        formatted_info.append(game_info)
+        formatted_info.append("")
+    
+    # 添加其他信息
     for key, value in workshop_info.items():
-        if key in ["🔗 作者主页", "🎮 所属游戏"]:
-            # 这些字段已经包含完整URL，直接显示
-            formatted_info.append(f"{key}: {value}")
-        else:
-            formatted_info.append(f"{key}: {value}")
+        if key not in ["🎮 所属游戏", "🔗 游戏链接"]:
+            if key in ["🔗 作者主页", "🖼️ 预览图"]:
+                formatted_info.append(f"{key}: {value}")
+            elif key == "🏷️ 标签":
+                formatted_info.append(f"{key}:")
+                formatted_info.append(value)
+            else:
+                formatted_info.append(f"{key}: {value}")
 
     if formatted_info:
         result.chain.append(Plain("\n".join(formatted_info)))
@@ -323,7 +383,6 @@ async def process_steam_workshop(event, workshop_url):
         result.chain.append(Image.fromFileSystem(WORKSHOP_SCREENSHOT_PATH))
 
     await event.send(result)
-
 
 async def get_steam_page_info(url):
     """ 解析 Steam 商店页面信息 """
