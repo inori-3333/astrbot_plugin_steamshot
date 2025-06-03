@@ -1,4 +1,4 @@
-# Check Steam-Link V1.5.1
+# Check Steam-Link V1.6.3
 
 一个AstrBot插件。
 A plugin for AstrBot.
@@ -72,10 +72,21 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 ## v1.5.0
 + 新增支持steam主页解析功能
 
-## v1.5.1
+## v1.6.0
++ 新增支持steam创意工坊解析功能
+  
+  > 目前创意工坊解析存在2条尚未修复的问题：
+    + 订阅数解析的结果会指向文件大小
+    + 作者个人主页链接的解析结果错误
+
+## v1.6.1
 + 支持解析steam主页最新动态，并改善排版
 + 支持解析steam个人简介中的链接（之前考虑到可能会有些不良链接，不过现在还是觉得应该问题不大，还是放出来了）
 ![使用示例3](sample3.png)
+
+## v1.6.3
++ 新增支持steam个人主页封禁纪录解析
++ 修复了一个因为chrome自动更新导致的chromedriver版本不匹配的问题，现在如果控制台有报chromedriver版本不匹配，重载插件即可解决
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
