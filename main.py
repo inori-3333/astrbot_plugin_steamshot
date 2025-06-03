@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 import time
+import winreg
 
 def install_missing_packages():
     required_packages = ["selenium", "requests", "bs4", "webdriver-manager"]
@@ -55,18 +56,69 @@ def get_stored_chromedriver():
     return None
 
 def get_chromedriver():
-    """ 获取 ChromeDriver 路径，优先使用手动路径或缓存路径，若无则下载 """
-    
+    """ 获取 ChromeDriver 路径，优先使用手动路径或缓存路径，若无则下载。
+        若已有驱动但版本与当前 Chrome 不符（前三位版本号），则重新下载。
+    """
+    def get_browser_version():
+        try:
+            if sys.platform.startswith("win"):
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\\Google\\Chrome\\BLBeacon")
+                version, _ = winreg.QueryValueEx(key, "version")
+                return version
+            elif sys.platform.startswith("linux"):
+                result = subprocess.run(["google-chrome", "--version"], capture_output=True, text=True)
+                return result.stdout.strip().split()[-1]
+            elif sys.platform == "darwin":
+                result = subprocess.run(["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "--version"], capture_output=True, text=True)
+                return result.stdout.strip().split()[-1]
+        except Exception:
+            return None
+
+    def extract_driver_version_from_path(path):
+        try:
+            parts = os.path.normpath(path).split(os.sep)
+            for part in parts:
+                if part.count(".") >= 2:
+                    return part  # e.g., '137.0.7151.68'
+            return None
+        except Exception:
+            return None
+
+    def versions_match(browser_ver, driver_ver):
+        try:
+            b_parts = browser_ver.split(".")[:3]
+            d_parts = driver_ver.split(".")[:3]
+            return b_parts == d_parts
+        except Exception:
+            return False
+
+    browser_version = get_browser_version()
+
     if MANUAL_CHROMEDRIVER_PATH and os.path.exists(MANUAL_CHROMEDRIVER_PATH):
-        print(f"✅ 使用手动指定的 ChromeDriver: {MANUAL_CHROMEDRIVER_PATH}")
-        return MANUAL_CHROMEDRIVER_PATH
+        driver_version = extract_driver_version_from_path(MANUAL_CHROMEDRIVER_PATH)
+        print(f"🌐 检测到浏览器版本: {browser_version}, 当前驱动版本: {driver_version}")
+        if browser_version and driver_version and versions_match(browser_version, driver_version):
+            print(f"✅ 使用手动指定的 ChromeDriver: {MANUAL_CHROMEDRIVER_PATH}（版本匹配）")
+            return MANUAL_CHROMEDRIVER_PATH
+        else:
+            print("⚠️ 手动指定的 ChromeDriver 版本与浏览器不匹配，忽略使用")
 
     stored_path = get_stored_chromedriver()
-    if stored_path:
-        print(f"✅ 使用本地缓存的 ChromeDriver: {stored_path}")
-        return stored_path
+    if stored_path and os.path.exists(stored_path):
+        driver_version = extract_driver_version_from_path(stored_path)
+        print(f"🌐 检测到浏览器版本: {browser_version}, 当前驱动版本: {driver_version}")
+        if browser_version and driver_version and versions_match(browser_version, driver_version):
+            print(f"✅ 使用本地缓存的 ChromeDriver: {stored_path}（版本匹配）")
+            return stored_path
+        else:
+            print("⚠️ 本地 ChromeDriver 版本不匹配（前三位），准备重新下载...")
+            try:
+                os.remove(stored_path)
+                print("🗑 已删除旧的驱动")
+            except Exception as e:
+                print(f"❌ 删除旧驱动失败: {e}")
 
-    print("⚠️ 未找到有效的 ChromeDriver，正在下载最新版本...")
+    print("⚠️ 未找到有效的 ChromeDriver 或需重新下载，正在下载最新版本...")
     try:
         new_driver_path = ChromeDriverManager().install()
         with open(CHROMEDRIVER_PATH_FILE, "w") as f:
@@ -194,48 +246,96 @@ async def get_steam_workshop_info(url):
             soup = BeautifulSoup(driver.page_source, "html.parser")
             
             info = {}
+            
+            # 0. 获取游戏名称和链接
+            breadcrumbs = soup.find("div", class_="breadcrumbs")
+            if breadcrumbs:
+                game_link = breadcrumbs.find("a")
+                if game_link:
+                    info["🎮 所属游戏"] = game_link.text.strip()
+                    game_href = game_link["href"]
+                    if not game_href.startswith("http"):
+                        game_href = "https://steamcommunity.com" + game_href
+                    info["🔗 游戏链接"] = game_href
 
             # 1. 获取模组名称
             title = soup.find("div", class_="workshopItemTitle")
             info["🛠️ 模组名称"] = title.text.strip() if title else "未知"
 
-            # 2. 获取作者信息 - 精确提取作者名
-            author_block = soup.find("div", class_="friendBlockContent")
-            if author_block:
-                # 获取第一个文本节点（作者名）
-                author_name = next((text for text in author_block.stripped_strings), "未知").split('\n')[0]
-                info["👤 作者"] = author_name.strip()
-                
-                # 尝试获取作者链接
-                author_link = author_block.find("a")
+            # 2. 获取作者信息和真实主页链接
+            creator_block = soup.find("div", class_="creatorsBlock")
+            if creator_block:
+                author_name = next((text for text in creator_block.stripped_strings if text.strip()), "未知")
+                author_link = creator_block.find("a")
                 if author_link:
+                    info["👤 作者"] = author_name.split('\n')[0].strip()
                     author_href = author_link["href"]
                     if not author_href.startswith("http"):
                         author_href = "https://steamcommunity.com" + author_href
                     info["🔗 作者主页"] = author_href
-                else:
-                    # 如果没有链接，尝试从作者名构造个人资料链接
-                    if author_name and author_name != "未知":
-                        info["🔗 作者主页"] = f"https://steamcommunity.com/id/{author_name}"
-            else:
-                info["👤 作者"] = "未知"
+                    
+                    status = creator_block.find("span", class_="friendSmallText")
+                    if status:
+                        info["🟢 作者状态"] = status.text.strip()
 
-            # 3. 获取订阅数 - 更可靠的查找方式
-            subscribers = soup.find("div", class_="numSubscribers") or \
-                        soup.find("div", class_="detailsStatRight", string=re.compile(r"\d+(\,\d+)*"))
-            info["📊 订阅数"] = subscribers.text.strip() if subscribers else "未知"
+            # 3. 获取评分信息
+            rating_section = soup.find("div", class_="ratingSection")
+            if rating_section:
+                rating_img = rating_section.find("img")
+                if rating_img:
+                    info["⭐ 评分"] = rating_img["src"].split("/")[-1].split("_")[0] + " stars"
+                num_ratings = rating_section.find("div", class_="numRatings")
+                if num_ratings:
+                    info["📈 评分数量"] = num_ratings.text.strip()
 
-            # 4. 获取详细信息（大小、创建日期）
-            stats_container = soup.find("div", class_="detailsStatsContainerRight")
-            if stats_container:
-                stats_items = stats_container.find_all("div", class_="detailsStatRight")
+            # 4. 获取统计数据（访客、订阅、收藏）
+            stats_table = soup.find("table", class_="stats_table")
+            if stats_table:
+                for row in stats_table.find_all("tr"):
+                    cells = row.find_all("td")
+                    if len(cells) == 2:
+                        value = cells[0].text.strip()
+                        label = cells[1].text.strip()
+                        
+                        if "Unique Visitors" in label:
+                            info["👀 访客数"] = value
+                        elif "Current Subscribers" in label:
+                            info["📊 订阅数"] = value
+                        elif "Current Favorites" in label:
+                            info["❤️ 收藏数"] = value
+
+            # 5. 获取文件大小和日期信息
+            stats_right = soup.find("div", class_="detailsStatsContainerRight")
+            if stats_right:
+                stats_items = stats_right.find_all("div", class_="detailsStatRight")
                 if len(stats_items) >= 1:
                     info["📦 文件大小"] = stats_items[0].text.strip()
                 if len(stats_items) >= 2:
                     info["🗓️ 创建日期"] = stats_items[1].text.strip()
-                # 有些页面可能没有更新日期
                 if len(stats_items) >= 3:
                     info["🔄 更新日期"] = stats_items[2].text.strip()
+
+            # 6. 获取标签信息
+            tags_container = soup.find("div", class_="rightDetailsBlock")
+            if tags_container:
+                tags = []
+                for tag_div in tags_container.find_all("div", class_="workshopTags"):
+                    tag_title = tag_div.find("span", class_="workshopTagsTitle")
+                    if tag_title:
+                        tag_text = tag_title.text.replace(":", "").strip()
+                        tag_links = [a.text for a in tag_div.find_all("a")]
+                        if tag_links:
+                            tags.append(f"{tag_text}: {', '.join(tag_links)}")
+                if tags:
+                    info["🏷️ 标签"] = "\n".join(tags)
+
+            # 7. 获取描述内容
+            description = soup.find("div", class_="workshopItemDescription")
+            if description:
+                for tag in description.find_all(["script", "style", "img", "a"]):
+                    tag.decompose()
+                desc_text = description.get_text(separator="\n", strip=True)
+                info["📝 描述"] = desc_text[:500] + "..." if len(desc_text) > 500 else desc_text
 
             return info
 
@@ -255,14 +355,26 @@ async def process_steam_workshop(event, workshop_url):
     await asyncio.gather(info_task, screenshot_task)
     workshop_info = await info_task
 
-    # 格式化输出信息
     formatted_info = []
+    
+    # 优先显示游戏信息
+    if "🎮 所属游戏" in workshop_info:
+        game_info = f"游戏名称: {workshop_info['🎮 所属游戏']}"
+        if "🔗 游戏链接" in workshop_info:
+            game_info += f" {workshop_info['🔗 游戏链接']}"
+        formatted_info.append(game_info)
+        formatted_info.append("")
+    
+    # 添加其他信息
     for key, value in workshop_info.items():
-        if key in ["🔗 作者主页", "🎮 所属游戏"]:
-            # 这些字段已经包含完整URL，直接显示
-            formatted_info.append(f"{key}: {value}")
-        else:
-            formatted_info.append(f"{key}: {value}")
+        if key not in ["🎮 所属游戏", "🔗 游戏链接"]:
+            if key in ["🔗 作者主页", "🖼️ 预览图"]:
+                formatted_info.append(f"{key}: {value}")
+            elif key == "🏷️ 标签":
+                formatted_info.append(f"{key}:")
+                formatted_info.append(value)
+            else:
+                formatted_info.append(f"{key}: {value}")
 
     if formatted_info:
         result.chain.append(Plain("\n".join(formatted_info)))
@@ -271,7 +383,6 @@ async def process_steam_workshop(event, workshop_url):
         result.chain.append(Image.fromFileSystem(WORKSHOP_SCREENSHOT_PATH))
 
     await event.send(result)
-
 
 async def get_steam_page_info(url):
     """ 解析 Steam 商店页面信息 """
@@ -355,96 +466,176 @@ async def process_steam_store(event, steam_url):
     await event.send(result)
 
 async def get_steam_profile_info(url):
-    """ 解析 Steam 个人主页信息 """
+    """ 解析 Steam 个人主页信息（支持完整最新动态） """
     def parse():
         driver = create_driver()
+        if not driver:
+            return []
+
+        standard_profile_lines = []
+        recent_activity_parsed_lines = []
+
         try:
             driver.set_page_load_timeout(15)
             driver.get(url)
-            bypass_steam_age_check(driver)
-            time.sleep(2)  # 等待页面渲染完整
+            time.sleep(2)
 
             soup = BeautifulSoup(driver.page_source, "html.parser")
-            info = []
 
-            # 1. 解析 Steam ID
+            # 1. Steam ID
             name_span = soup.find("span", class_="actual_persona_name")
             if name_span:
                 steam_id = name_span.text.strip()
-                info.append(f"steam id: {steam_id}")
+                standard_profile_lines.append(f"steam id: {steam_id}")
 
-            # 2. 检查是否为私密主页
+            # 🔒 1.5 检查封禁状态（如有则立即返回封禁信息）
+            ban_section = soup.find("div", class_="profile_ban_status")
+            if ban_section:
+                ban_records = []
+                for div in ban_section.find_all("div", class_="profile_ban"):
+                    ban_text = div.get_text(strip=True).replace("|信息", "").strip()
+                    if ban_text:
+                        ban_records.append(ban_text)
+                # 提取封禁时间（如有）
+                ban_status_text = ban_section.get_text(separator="\n", strip=True)
+                for line in ban_status_text.split("\n"):
+                    if "封禁于" in line:
+                        ban_records.append(line.strip())
+                if ban_records:
+                    standard_profile_lines.append(f"🚫 封禁纪录: \n{'\n'.join(ban_records)}")
+
+            # 2. 私密资料判断
+            is_private = False
             if soup.find("div", class_="profile_private_info"):
-                info.append("个人简介: 此个人资料是私密的。")
-                return info
+                standard_profile_lines.append("此个人资料是私密的")
+                is_private = True
 
-            # 3. 解析个人简介
-            summary = soup.find("div", class_="profile_summary")
-            if summary:
-                # 移除图片和链接，仅保留文字
-                for tag in summary.find_all(["img", "a"]):
-                    tag.decompose()
-                profile_text = summary.get_text(separator="\n", strip=True)
-                if profile_text:
-                    info.append(f"个人简介: {profile_text}")
-            else:
-                pass  # 没有简介，继续解析下方内容
+            # 3. 简介
+            if not is_private:
+                summary_div = soup.find("div", class_="profile_summary")
+                if summary_div:
+                    for tag in summary_div.find_all(["img"]):
+                        tag.decompose()
+                    profile_text = summary_div.get_text(separator="\n", strip=True)
+                    if profile_text:
+                        standard_profile_lines.append(f"个人简介: \n{profile_text}")
 
-            # 4. 解析 Steam 等级
+            # 4. 等级
             level_span = soup.find("span", class_="friendPlayerLevelNum")
             if level_span:
-                level = level_span.text.strip()
-                info.append(f"steam等级: {level}")
+                standard_profile_lines.append(f"steam等级: {level_span.text.strip()}")
 
-            # 5. 解析地区
+            # 5. 地区
             location_div = soup.find("div", class_="header_location")
             if location_div:
-                location_text = location_div.get_text(strip=True)
-                if location_text:
-                    info.append(f"地区: {location_text}")
+                standard_profile_lines.append(f"地区: {location_div.get_text(strip=True)}")
 
-            # 6. 解析当前状态
+            # 6. 当前状态
             status_div = soup.find("div", class_="responsive_status_info")
             if status_div:
-                status_header = status_div.find("div", class_="profile_in_game_header")
-                if status_header:
-                    status = status_header.text.strip()
-                    if status == "当前离线":
-                        info.append("当前状态: 当前离线")
-                    elif status == "当前在线":
-                        info.append("当前状态: 当前在线")
-                    elif status == "当前正在游戏":
+                header = status_div.find("div", class_="profile_in_game_header")
+                if header:
+                    state = header.text.strip()
+                    if state == "当前离线":
+                        standard_profile_lines.append("当前状态: 当前离线")
+                    elif state == "当前在线":
+                        standard_profile_lines.append("当前状态: 当前在线")
+                    elif state == "当前正在游戏":
                         game_name_div = status_div.find("div", class_="profile_in_game_name")
                         game_name = game_name_div.text.strip() if game_name_div else "未知游戏"
-                        info.append(f"当前状态: 当前正在游戏 {game_name}")
+                        standard_profile_lines.append(f"当前状态: 当前正在游戏 \n                     {game_name}")
 
-            # 7. 解析游戏数
-            game_count = None
+            # 7. 游戏数
             for link in soup.find_all("a", href=True):
                 if "games/?tab=all" in link["href"]:
                     count_span = link.find("span", class_="profile_count_link_total")
                     if count_span:
-                        game_count = count_span.text.strip()
-                        if game_count:
-                            info.append(f"游戏数: {game_count}")
+                        standard_profile_lines.append(f"游戏数: {count_span.text.strip()}")
                     break
 
-            # 8. 解析好友数
+            # 8. 好友数
             for link in soup.find_all("a", href=True):
-                if "/friends/" in link["href"]:
+                if link["href"].endswith("/friends/"):
                     count_span = link.find("span", class_="profile_count_link_total")
                     if count_span:
-                        friend_count = count_span.text.strip()
-                        if friend_count:
-                            info.append(f"好友数: {friend_count}")
+                        standard_profile_lines.append(f"好友数: {count_span.text.strip()}")
                     break
 
-            return info
+            # 9. 最新动态
+            if not is_private:
+                recent_activity_customization_div = None
+                customization_divs = soup.find_all("div", class_="profile_customization")
+                for div_block in customization_divs:
+                    header = div_block.find("div", class_="profile_recentgame_header")
+                    if header and "最新动态" in header.get_text(strip=True):
+                        recent_activity_customization_div = div_block
+                        break
+
+                if recent_activity_customization_div:
+                    playtime_header = recent_activity_customization_div.find("div", class_="profile_recentgame_header")
+                    if playtime_header:
+                        playtime_recent_div = playtime_header.find("div", class_="recentgame_recentplaytime")
+                        if playtime_recent_div:
+                            playtime_text_container = playtime_recent_div.find("div")
+                            if playtime_text_container:
+                                playtime = playtime_text_container.text.strip()
+                                if playtime:
+                                    recent_activity_parsed_lines.append(f"🕒 最新动态: {playtime}")
+
+                    recent_games_block = recent_activity_customization_div.find("div", class_="recent_games")
+                    if recent_games_block:
+                        for game_div in recent_games_block.find_all("div", class_="recent_game", limit=3):
+                            game_name_tag = game_div.find("div", class_="game_name")
+                            game_name = game_name_tag.find("a", class_="whiteLink").text.strip() if game_name_tag and game_name_tag.find("a") else "未知游戏"
+
+                            game_info_details_div = game_div.find("div", class_="game_info_details")
+                            total_playtime = "未知总时数"
+                            last_played = None
+                            is_currently_playing = False
+
+                            if game_info_details_div:
+                                details_texts = [item.strip() for item in game_info_details_div.contents if isinstance(item, str) and item.strip()]
+                                for part in details_texts:
+                                    if part.startswith("总时数"):
+                                        total_playtime = part
+                                    elif part.startswith("最后运行日期："):
+                                        last_played = part
+                                    elif part == "当前正在游戏":
+                                        is_currently_playing = True
+
+                            recent_activity_parsed_lines.append(f"\n🎮 {game_name}: {total_playtime}")
+                            if is_currently_playing:
+                                recent_activity_parsed_lines.append(f"🎮 当前正在游戏")
+                            elif last_played:
+                                recent_activity_parsed_lines.append(f"📅 {last_played}")
+
+                            ach_str = None
+                            stats_div = game_div.find("div", class_="game_info_stats")
+                            if stats_div:
+                                ach_area = stats_div.find("div", class_="game_info_achievements_summary_area")
+                                if ach_area:
+                                    summary_span = ach_area.find("span", class_="game_info_achievement_summary")
+                                    if summary_span:
+                                        ach_text_tag = summary_span.find("a", class_="whiteLink")
+                                        ach_progress_tag = summary_span.find("span", class_="ellipsis")
+                                        if ach_text_tag and "成就进度" in ach_text_tag.text and ach_progress_tag:
+                                            ach_str = f"🏆 {ach_text_tag.text.strip()}  {ach_progress_tag.text.strip()}"
+                            if ach_str:
+                                recent_activity_parsed_lines.append(f"{ach_str}")
+
+            return standard_profile_lines + recent_activity_parsed_lines
+
+        except Exception as e:
+            print(f"❌ 解析 Steam 个人主页错误: {e}")
+            combined_on_error = standard_profile_lines + recent_activity_parsed_lines
+            return combined_on_error if combined_on_error else ["⚠️ 无法获取个人主页部分信息。"]
 
         finally:
-            driver.quit()
+            if driver:
+                driver.quit()
 
     return await asyncio.to_thread(parse)
+
 
 async def process_steam_profile(event, profile_url):
     """ 处理 Steam 个人主页 """
