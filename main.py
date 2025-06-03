@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 import time
+import winreg
 
 def install_missing_packages():
     required_packages = ["selenium", "requests", "bs4", "webdriver-manager"]
@@ -31,13 +32,15 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api.all import *
 
-# **🔹 Steam 商店 & 个人主页匹配正则**
+# **🔹 Steam 链接匹配正则**
 STEAM_URL_PATTERN = r"https://store\.steampowered\.com/app/(\d+)/[\w\-]+/?"
 STEAM_PROFILE_URL_PATTERN = r"https://steamcommunity\.com/(profiles/\d{17}|id/[A-Za-z0-9\-_]+)/?"
+STEAM_WORKSHOP_URL_PATTERN = r"https://steamcommunity\.com/(sharedfiles/filedetails|workshop/filedetails)/\?id=(\d+)"
 
 # **🔹 截图路径**
 STORE_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/store_screenshot.png"
 PROFILE_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/profile_screenshot.png"
+WORKSHOP_SCREENSHOT_PATH = "./data/plugins/astrbot_plugin_steamshot/screenshots/workshop_screenshot.png"
 
 # **🔹 指定 ChromeDriver 路径**
 MANUAL_CHROMEDRIVER_PATH = r""
@@ -53,18 +56,69 @@ def get_stored_chromedriver():
     return None
 
 def get_chromedriver():
-    """ 获取 ChromeDriver 路径，优先使用手动路径或缓存路径，若无则下载 """
-    
+    """ 获取 ChromeDriver 路径，优先使用手动路径或缓存路径，若无则下载。
+        若已有驱动但版本与当前 Chrome 不符（前三位版本号），则重新下载。
+    """
+    def get_browser_version():
+        try:
+            if sys.platform.startswith("win"):
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\\Google\\Chrome\\BLBeacon")
+                version, _ = winreg.QueryValueEx(key, "version")
+                return version
+            elif sys.platform.startswith("linux"):
+                result = subprocess.run(["google-chrome", "--version"], capture_output=True, text=True)
+                return result.stdout.strip().split()[-1]
+            elif sys.platform == "darwin":
+                result = subprocess.run(["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "--version"], capture_output=True, text=True)
+                return result.stdout.strip().split()[-1]
+        except Exception:
+            return None
+
+    def extract_driver_version_from_path(path):
+        try:
+            parts = os.path.normpath(path).split(os.sep)
+            for part in parts:
+                if part.count(".") >= 2:
+                    return part  # e.g., '137.0.7151.68'
+            return None
+        except Exception:
+            return None
+
+    def versions_match(browser_ver, driver_ver):
+        try:
+            b_parts = browser_ver.split(".")[:3]
+            d_parts = driver_ver.split(".")[:3]
+            return b_parts == d_parts
+        except Exception:
+            return False
+
+    browser_version = get_browser_version()
+
     if MANUAL_CHROMEDRIVER_PATH and os.path.exists(MANUAL_CHROMEDRIVER_PATH):
-        print(f"✅ 使用手动指定的 ChromeDriver: {MANUAL_CHROMEDRIVER_PATH}")
-        return MANUAL_CHROMEDRIVER_PATH
+        driver_version = extract_driver_version_from_path(MANUAL_CHROMEDRIVER_PATH)
+        print(f"🌐 检测到浏览器版本: {browser_version}, 当前驱动版本: {driver_version}")
+        if browser_version and driver_version and versions_match(browser_version, driver_version):
+            print(f"✅ 使用手动指定的 ChromeDriver: {MANUAL_CHROMEDRIVER_PATH}（版本匹配）")
+            return MANUAL_CHROMEDRIVER_PATH
+        else:
+            print("⚠️ 手动指定的 ChromeDriver 版本与浏览器不匹配，忽略使用")
 
     stored_path = get_stored_chromedriver()
-    if stored_path:
-        print(f"✅ 使用本地缓存的 ChromeDriver: {stored_path}")
-        return stored_path
+    if stored_path and os.path.exists(stored_path):
+        driver_version = extract_driver_version_from_path(stored_path)
+        print(f"🌐 检测到浏览器版本: {browser_version}, 当前驱动版本: {driver_version}")
+        if browser_version and driver_version and versions_match(browser_version, driver_version):
+            print(f"✅ 使用本地缓存的 ChromeDriver: {stored_path}（版本匹配）")
+            return stored_path
+        else:
+            print("⚠️ 本地 ChromeDriver 版本不匹配（前三位），准备重新下载...")
+            try:
+                os.remove(stored_path)
+                print("🗑 已删除旧的驱动")
+            except Exception as e:
+                print(f"❌ 删除旧驱动失败: {e}")
 
-    print("⚠️ 未找到有效的 ChromeDriver，正在下载最新版本...")
+    print("⚠️ 未找到有效的 ChromeDriver 或需重新下载，正在下载最新版本...")
     try:
         new_driver_path = ChromeDriverManager().install()
         with open(CHROMEDRIVER_PATH_FILE, "w") as f:
@@ -174,6 +228,103 @@ async def capture_screenshot(url, save_path):
 
     await asyncio.to_thread(run)
 
+async def get_steam_workshop_info(url):
+    """ 解析 Steam 创意工坊页面信息 """
+    def parse():
+        driver = create_driver()
+        try:
+            driver.set_page_load_timeout(15)
+            for attempt in range(3):
+                try:
+                    driver.get(url)
+                    bypass_steam_age_check(driver)
+                    break
+                except Exception:
+                    print(f"⚠️ 第 {attempt + 1} 次刷新页面...")
+                    driver.refresh()
+
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            
+            info = {}
+
+            # 1. 获取模组名称
+            title = soup.find("div", class_="workshopItemTitle")
+            info["🛠️ 模组名称"] = title.text.strip() if title else "未知"
+
+            # 2. 获取作者信息 - 精确提取作者名
+            author_block = soup.find("div", class_="friendBlockContent")
+            if author_block:
+                # 获取第一个文本节点（作者名）
+                author_name = next((text for text in author_block.stripped_strings), "未知").split('\n')[0]
+                info["👤 作者"] = author_name.strip()
+                
+                # 尝试获取作者链接
+                author_link = author_block.find("a")
+                if author_link:
+                    author_href = author_link["href"]
+                    if not author_href.startswith("http"):
+                        author_href = "https://steamcommunity.com" + author_href
+                    info["🔗 作者主页"] = author_href
+                else:
+                    # 如果没有链接，尝试从作者名构造个人资料链接
+                    if author_name and author_name != "未知":
+                        info["🔗 作者主页"] = f"https://steamcommunity.com/id/{author_name}"
+            else:
+                info["👤 作者"] = "未知"
+
+            # 3. 获取订阅数 - 更可靠的查找方式
+            subscribers = soup.find("div", class_="numSubscribers") or \
+                        soup.find("div", class_="detailsStatRight", string=re.compile(r"\d+(\,\d+)*"))
+            info["📊 订阅数"] = subscribers.text.strip() if subscribers else "未知"
+
+            # 4. 获取详细信息（大小、创建日期）
+            stats_container = soup.find("div", class_="detailsStatsContainerRight")
+            if stats_container:
+                stats_items = stats_container.find_all("div", class_="detailsStatRight")
+                if len(stats_items) >= 1:
+                    info["📦 文件大小"] = stats_items[0].text.strip()
+                if len(stats_items) >= 2:
+                    info["🗓️ 创建日期"] = stats_items[1].text.strip()
+                # 有些页面可能没有更新日期
+                if len(stats_items) >= 3:
+                    info["🔄 更新日期"] = stats_items[2].text.strip()
+
+            return info
+
+        finally:
+            driver.quit()
+
+    return await asyncio.to_thread(parse)
+
+
+async def process_steam_workshop(event, workshop_url):
+    """ 处理 Steam 创意工坊链接 """
+    result = MessageChain()
+
+    info_task = asyncio.create_task(get_steam_workshop_info(workshop_url))
+    screenshot_task = asyncio.create_task(capture_screenshot(workshop_url, WORKSHOP_SCREENSHOT_PATH))
+
+    await asyncio.gather(info_task, screenshot_task)
+    workshop_info = await info_task
+
+    # 格式化输出信息
+    formatted_info = []
+    for key, value in workshop_info.items():
+        if key in ["🔗 作者主页", "🎮 所属游戏"]:
+            # 这些字段已经包含完整URL，直接显示
+            formatted_info.append(f"{key}: {value}")
+        else:
+            formatted_info.append(f"{key}: {value}")
+
+    if formatted_info:
+        result.chain.append(Plain("\n".join(formatted_info)))
+
+    if os.path.exists(WORKSHOP_SCREENSHOT_PATH):
+        result.chain.append(Image.fromFileSystem(WORKSHOP_SCREENSHOT_PATH))
+
+    await event.send(result)
+
+
 async def get_steam_page_info(url):
     """ 解析 Steam 商店页面信息 """
     def parse():
@@ -277,6 +428,22 @@ async def get_steam_profile_info(url):
             if name_span:
                 steam_id = name_span.text.strip()
                 standard_profile_lines.append(f"steam id: {steam_id}")
+
+            # 🔒 1.5 检查封禁状态（如有则立即返回封禁信息）
+            ban_section = soup.find("div", class_="profile_ban_status")
+            if ban_section:
+                ban_records = []
+                for div in ban_section.find_all("div", class_="profile_ban"):
+                    ban_text = div.get_text(strip=True).replace("|信息", "").strip()
+                    if ban_text:
+                        ban_records.append(ban_text)
+                # 提取封禁时间（如有）
+                ban_status_text = ban_section.get_text(separator="\n", strip=True)
+                for line in ban_status_text.split("\n"):
+                    if "封禁于" in line:
+                        ban_records.append(line.strip())
+                if ban_records:
+                    standard_profile_lines.append(f"🚫 封禁纪录: \n{'\n'.join(ban_records)}")
 
             # 2. 私密资料判断
             is_private = False
@@ -472,3 +639,10 @@ class SteamPlugin(Star):
     async def handle_steam_profile(self, event: AstrMessageEvent):
         profile_url = re.search(STEAM_PROFILE_URL_PATTERN, event.message_str).group(0)
         await process_steam_profile(event, profile_url)
+
+    @filter.regex(STEAM_WORKSHOP_URL_PATTERN)
+    async def handle_steam_workshop(self, event: AstrMessageEvent):
+        match = re.search(STEAM_WORKSHOP_URL_PATTERN, event.message_str)
+        workshop_id = match.group(2)
+        workshop_url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
+        await process_steam_workshop(event, workshop_url)
