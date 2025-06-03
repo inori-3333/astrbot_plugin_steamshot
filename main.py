@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 import time
+import winreg
 
 def install_missing_packages():
     required_packages = ["selenium", "requests", "bs4", "webdriver-manager"]
@@ -55,18 +56,69 @@ def get_stored_chromedriver():
     return None
 
 def get_chromedriver():
-    """ 获取 ChromeDriver 路径，优先使用手动路径或缓存路径，若无则下载 """
-    
+    """ 获取 ChromeDriver 路径，优先使用手动路径或缓存路径，若无则下载。
+        若已有驱动但版本与当前 Chrome 不符（前三位版本号），则重新下载。
+    """
+    def get_browser_version():
+        try:
+            if sys.platform.startswith("win"):
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\\Google\\Chrome\\BLBeacon")
+                version, _ = winreg.QueryValueEx(key, "version")
+                return version
+            elif sys.platform.startswith("linux"):
+                result = subprocess.run(["google-chrome", "--version"], capture_output=True, text=True)
+                return result.stdout.strip().split()[-1]
+            elif sys.platform == "darwin":
+                result = subprocess.run(["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "--version"], capture_output=True, text=True)
+                return result.stdout.strip().split()[-1]
+        except Exception:
+            return None
+
+    def extract_driver_version_from_path(path):
+        try:
+            parts = os.path.normpath(path).split(os.sep)
+            for part in parts:
+                if part.count(".") >= 2:
+                    return part  # e.g., '137.0.7151.68'
+            return None
+        except Exception:
+            return None
+
+    def versions_match(browser_ver, driver_ver):
+        try:
+            b_parts = browser_ver.split(".")[:3]
+            d_parts = driver_ver.split(".")[:3]
+            return b_parts == d_parts
+        except Exception:
+            return False
+
+    browser_version = get_browser_version()
+
     if MANUAL_CHROMEDRIVER_PATH and os.path.exists(MANUAL_CHROMEDRIVER_PATH):
-        print(f"✅ 使用手动指定的 ChromeDriver: {MANUAL_CHROMEDRIVER_PATH}")
-        return MANUAL_CHROMEDRIVER_PATH
+        driver_version = extract_driver_version_from_path(MANUAL_CHROMEDRIVER_PATH)
+        print(f"🌐 检测到浏览器版本: {browser_version}, 当前驱动版本: {driver_version}")
+        if browser_version and driver_version and versions_match(browser_version, driver_version):
+            print(f"✅ 使用手动指定的 ChromeDriver: {MANUAL_CHROMEDRIVER_PATH}（版本匹配）")
+            return MANUAL_CHROMEDRIVER_PATH
+        else:
+            print("⚠️ 手动指定的 ChromeDriver 版本与浏览器不匹配，忽略使用")
 
     stored_path = get_stored_chromedriver()
-    if stored_path:
-        print(f"✅ 使用本地缓存的 ChromeDriver: {stored_path}")
-        return stored_path
+    if stored_path and os.path.exists(stored_path):
+        driver_version = extract_driver_version_from_path(stored_path)
+        print(f"🌐 检测到浏览器版本: {browser_version}, 当前驱动版本: {driver_version}")
+        if browser_version and driver_version and versions_match(browser_version, driver_version):
+            print(f"✅ 使用本地缓存的 ChromeDriver: {stored_path}（版本匹配）")
+            return stored_path
+        else:
+            print("⚠️ 本地 ChromeDriver 版本不匹配（前三位），准备重新下载...")
+            try:
+                os.remove(stored_path)
+                print("🗑 已删除旧的驱动")
+            except Exception as e:
+                print(f"❌ 删除旧驱动失败: {e}")
 
-    print("⚠️ 未找到有效的 ChromeDriver，正在下载最新版本...")
+    print("⚠️ 未找到有效的 ChromeDriver 或需重新下载，正在下载最新版本...")
     try:
         new_driver_path = ChromeDriverManager().install()
         with open(CHROMEDRIVER_PATH_FILE, "w") as f:
@@ -376,6 +428,22 @@ async def get_steam_profile_info(url):
             if name_span:
                 steam_id = name_span.text.strip()
                 standard_profile_lines.append(f"steam id: {steam_id}")
+
+            # 🔒 1.5 检查封禁状态（如有则立即返回封禁信息）
+            ban_section = soup.find("div", class_="profile_ban_status")
+            if ban_section:
+                ban_records = []
+                for div in ban_section.find_all("div", class_="profile_ban"):
+                    ban_text = div.get_text(strip=True).replace("|信息", "").strip()
+                    if ban_text:
+                        ban_records.append(ban_text)
+                # 提取封禁时间（如有）
+                ban_status_text = ban_section.get_text(separator="\n", strip=True)
+                for line in ban_status_text.split("\n"):
+                    if "封禁于" in line:
+                        ban_records.append(line.strip())
+                if ban_records:
+                    standard_profile_lines.append(f"🚫 封禁纪录: \n{'\n'.join(ban_records)}")
 
             # 2. 私密资料判断
             is_private = False
