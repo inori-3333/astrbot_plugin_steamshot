@@ -1,8 +1,8 @@
 # Check Steam-Link V1.6.3
 
-一个AstrBot插件。
-A plugin for AstrBot.
-如果您觉得对您有用，请点一个star，我会学猫娘叫。
++ 一个AstrBot插件。A plugin for AstrBot.
++ 如果您觉得对您有用，请点一个star，我会学猫娘叫。
++ 当前版本：v1.6.3
 
 # 功能介绍
 ## 已实现
