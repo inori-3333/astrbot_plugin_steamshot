@@ -7,13 +7,16 @@
 
 # 功能介绍
 ## 已实现
-- 自动检测对话中出现的steam商店页链接，并返回对应页面的网页截图和摘要信息。
-- 更详细的信息解析。
-- 检测steam个人主页链接，并返回个人主页截图。
+自动检测对话中出现的如下内容，并返回对应页面的网页截图和摘要信息：
+- steam商店页链接
+- steam个人主页链接
+- steam创意工坊链接
+
   目前支持的格式如下：
 ```
 https://store.steampowered.com/app/881020/Granblue_Fantasy_Relink/ # 游戏商店页链接
 https://steamcommunity.com/id/inori_333/ # 个人主页链接
+https://steamcommunity.com/sharedfiles/filedetails/?id=3472726693 # 创意工坊物品链接
 ```
 可解析的信息：
 ```
@@ -28,7 +31,6 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 是否支持中文（包括简体中文和繁体中文）
 ```
 ## 待实现
-- 返回更更详细的商店页文字信息。
 - 返回与链接游戏相关的其他信息，比如从SteamDB获取的价格变化等等。
 - 支持参数设置，比如是否需要返回截图，截屏的宽度和高度，返回摘要的详细等级等等。
 - 支持解析steam个人隐私允许条件下的所有steam好友的状态，比如好友是否在线，好友正在玩什么游戏等等。
@@ -43,7 +45,7 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 - requests
 - beautifulsoup4
 
-但是，您应该无需手动安装任何第三方库，也无需手动安装chrome驱动，本插件会自动检测您的环境，并安装缺失的库和驱动。
+但是，您应该无需手动安装任何第三方库，也无需手动安装chrome驱动，插件会自动检测您的环境，并安装缺失的库和驱动。
 即，**唯一的必要条件：您的astrbot运行环境需要有Chrome浏览器。**
 
 ## 前端使用
@@ -51,6 +53,7 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 (当然目前也不支持任何指令就是了)
 
 # 使用示例
+_以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中新的示例。_
 ![使用示例](sample.png)
 ![使用示例2](sample2.png)
 
@@ -89,5 +92,6 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 ## v1.6.3
 + 新增支持steam个人主页封禁记录解析
 + 修复了chrome自动更新导致的chromedriver版本不匹配的问题，如果控制台返回chromedriver版本不匹配，重载插件即可解决
+
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
