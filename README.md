@@ -86,8 +86,7 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 ![使用示例3](sample3.png)
 
 ## v1.6.3
-+ 新增支持steam个人主页封禁纪录解析
-+ 修复了一个因为chrome自动更新导致的chromedriver版本不匹配的问题，现在如果控制台有报chromedriver版本不匹配，重载插件即可解决
-
++ 新增支持steam个人主页封禁记录解析
++ 修复了chrome自动更新导致的chromedriver版本不匹配的问题，如果控制台返回chromedriver版本不匹配，重载插件即可解决
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
