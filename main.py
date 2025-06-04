@@ -684,6 +684,66 @@ async def process_steam_profile(event, profile_url):
 
     await event.send(result)
 
+async def steam_store_search(search_game_name: str, event: AstrMessageEvent):
+    """访问 Steam 搜索页面并跳转第一个游戏结果"""
+    url = f"https://store.steampowered.com/search/?term={search_game_name}&ndl=1"
+    driver = create_driver()
+    try:
+        driver.get(url)
+        time.sleep(2)
+
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+
+        # 检查是否没有结果
+        no_result_div = soup.select_one("#search_results .search_results_count")
+        if no_result_div and "0 个匹配的搜索结果" in no_result_div.text:
+            yield event.plain_result(f"❌ 没有找到名为 {search_game_name} 的游戏。")
+            return
+
+        # 查找第一条游戏链接
+        result_container = soup.select_one("#search_resultsRows a")
+        if result_container and result_container.has_attr("href"):
+            game_url = result_container["href"]
+            yield event.plain_result(f"🔍 正在解析符合条件的第一款游戏...\n🌐 链接：{game_url}")
+            await process_steam_store(event, game_url)
+        else:
+            yield event.plain_result("⚠️ 未能找到有效的游戏搜索结果。")
+
+    except Exception as e:
+        yield event.plain_result(f"❌ 搜索失败: {e}")
+    finally:
+        driver.quit()
+
+async def steam_user_search(search_user_name: str, event: AstrMessageEvent):
+    """搜索 Steam 用户并获取其主页 URL，传给 process_steam_profile"""
+    url = f"https://steamcommunity.com/search/users/#text={search_user_name}"
+    driver = create_driver()
+    try:
+        driver.get(url)
+        time.sleep(2)
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+
+        # ❌ 检查是否没有用户
+        no_user = soup.select_one(".search_results_error h2")
+        if no_user and "没有符合您搜索的用户" in no_user.text:
+            yield event.plain_result(f"❌ 没有找到名为 {search_user_name} 的用户。")
+            return
+
+        # ✅ 获取第一个用户链接
+        first_user_row = soup.select_one(".search_row a")
+        if first_user_row and first_user_row.has_attr("href"):
+            profile_url = first_user_row["href"]
+            yield event.plain_result(f"🔍 正在解析符合条件的第一位用户...\n🌐 链接: {profile_url}")
+            await process_steam_profile(event, profile_url)
+        else:
+            yield event.plain_result("⚠️ 未能解析出用户链接。")
+
+    except Exception as e:
+        yield event.plain_result(f"❌ 搜索用户失败: {e}")
+    finally:
+        driver.quit()
+
+
 @register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "1.6.0", "https://github.com/inori-3333/astrbot_plugin_steamshot")
 class SteamPlugin(Star):
     def __init__(self, context: Context):
@@ -705,3 +765,27 @@ class SteamPlugin(Star):
         workshop_id = match.group(2)
         workshop_url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
         await process_steam_workshop(event, workshop_url)
+
+    @filter.command("sss")
+    async def search_steam_store(self, event: AstrMessageEvent):
+        """搜索 Steam 商店游戏信息\n用法：/sss 游戏名"""
+        args = event.message_str.split(maxsplit=1)
+        if len(args) < 2:
+            yield event.plain_result("请输入要搜索的游戏名称，例如：/sss 犹格索托斯的庭院")
+            return
+
+        search_game_name = args[1]
+        async for response in steam_store_search(search_game_name, event):
+            yield response
+
+    @filter.command("ssu")
+    async def steam_steam_user(self, event: AstrMessageEvent):
+        """搜索 Steam 用户信息\n用法：/ssu 用户名"""
+        args = event.message_str.split(maxsplit=1)
+        if len(args) < 2:
+            yield event.plain_result("请输入要搜索的 Steam 用户名，例如：/ssu m4a1_death-Dawn")
+            return
+
+        search_user_name = args[1]
+        async for result in steam_user_search(search_user_name, event):
+            yield result
