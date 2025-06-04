@@ -2,6 +2,5 @@ name: Check Steam-Link # 这是你的插件的唯一识别名。
 desc: 自动检测消息中的Steam链接，获取商店页截图的摘要信息。注意，使用此插件需要主机上有chrome浏览器。 # 插件简短描述
 help: 当前不支持任何指令，当前版本为未完成版本，只支持商店页，工作模式固定。 # 插件的帮助信息
 version: v1.7.0 # 插件版本号。格式：v1.1.1 或者 v1.1
-=======
 author: Inori-3333 & m4a1deathDawn & haliludaxuanfeng & ZvZPvz # 作者
 repo: https://github.com/inori-3333/astrbot_plugin_steamshot # 插件的仓库地址
