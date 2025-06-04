@@ -1,3 +1,4 @@
+
 # Check Steam-Link V1.7.0
 
 + 一个AstrBot插件。A plugin for AstrBot.
@@ -104,6 +105,7 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 
 ## v1.7.0
 + 新增搜索steam商店和搜索steam用户指令
+
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
