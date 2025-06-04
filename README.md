@@ -1,17 +1,22 @@
-# Check Steam-Link V1.6.3
+# Check Steam-Link V1.7.0
 
-一个AstrBot插件。
-A plugin for AstrBot.
++ 一个AstrBot插件。A plugin for AstrBot.
+> 如果您觉得对您有用，请点一个star，我会学猫娘叫。
+
+> 当前版本：v1.7.0
 
 # 功能介绍
 ## 已实现
-- 自动检测对话中出现的steam商店页链接，并返回对应页面的网页截图和摘要信息。
-- 更详细的信息解析。
-- 检测steam个人主页链接，并返回个人主页截图。
+自动检测对话中出现的如下内容，并返回对应页面的网页截图和摘要信息：
+- steam商店页链接
+- steam个人主页链接
+- steam创意工坊链接
+
   目前支持的格式如下：
 ```
 https://store.steampowered.com/app/881020/Granblue_Fantasy_Relink/ # 游戏商店页链接
 https://steamcommunity.com/id/inori_333/ # 个人主页链接
+https://steamcommunity.com/sharedfiles/filedetails/?id=3472726693 # 创意工坊物品链接
 ```
 可解析的信息：
 ```
@@ -26,10 +31,11 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 是否支持中文（包括简体中文和繁体中文）
 ```
 ## 待实现
-- 返回更更详细的商店页文字信息。
 - 返回与链接游戏相关的其他信息，比如从SteamDB获取的价格变化等等。
 - 支持参数设置，比如是否需要返回截图，截屏的宽度和高度，返回摘要的详细等级等等。
 - 支持解析steam个人隐私允许条件下的所有steam好友的状态，比如好友是否在线，好友正在玩什么游戏等等。
+- 支持steam登录。
+- 支持在搜索steam商店和用户时，返回前x个选项（若有），通过回复指定序号解析指定页面
 
 # 使用方法
 ## 软件依赖
@@ -41,16 +47,24 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 - requests
 - beautifulsoup4
 
-但是，您应该无需手动安装任何第三方库，也无需手动安装chrome驱动，本插件会自动检测您的环境，并安装缺失的库和驱动。
+但是，您应该无需手动安装任何第三方库，也无需手动安装chrome驱动，插件会自动检测您的环境，并安装缺失的库和驱动。
 即，**唯一的必要条件：您的astrbot运行环境需要有Chrome浏览器。**
 
 ## 前端使用
-无需使用任何指令，插件会自动检测对话中出现的steam链接，并返回对应页面的网页截图和摘要信息。
-(当然目前也不支持任何指令就是了)
+根据收到的steam链接自动解析指定界面，插件会自动检测对话中出现的steam链接，并返回对应页面的网页截图和摘要信息（现仅支持steam商店界面、个人主页界面和创意工坊界面）。
+```
+使用  /sss  指令搜索steam商店，使用方法: /sss + 游戏名，如: /sss 不/存在的你，和我
+使用  /ssu  指令搜索steam用户，使用方法: /ssu + 用户名，如: /ssu m4a1_death-Dawn
+```
+
+![使用示例4](sample5.png)
+![使用示例5](sample4.png)
 
 # 使用示例
+_以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中新的示例。_
 ![使用示例](sample.png)
 ![使用示例2](sample2.png)
+
 
 # 更新记录
 ## v1.2.0
@@ -74,10 +88,6 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 
 ## v1.6.0
 + 新增支持steam创意工坊解析功能
-  
-  > 目前创意工坊解析存在2条尚未修复的问题：
-    + 订阅数解析的结果会指向文件大小
-    + 作者个人主页链接的解析结果错误
 
 ## v1.6.1
 + 支持解析steam主页最新动态，并改善排版
@@ -85,8 +95,15 @@ https://steamcommunity.com/id/inori_333/ # 个人主页链接
 ![使用示例3](sample3.png)
 
 ## v1.6.3
-+ 新增支持steam个人主页封禁纪录解析
-+ 修复了一个因为chrome自动更新导致的chromedriver版本不匹配的问题，现在如果控制台有报chromedriver版本不匹配，重载插件即可解决
++ 新增支持steam个人主页封禁记录解析
++ 修复了chrome自动更新导致的chromedriver版本不匹配的问题，如果控制台返回chromedriver版本不匹配，重载插件即可解决
+
+## v1.6.5
++ 修复了steam创意工坊解析的bug
++ 完善Steam创意工坊链接处理功能
+
+## v1.7.0
++ 新增搜索steam商店和搜索steam用户指令
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
