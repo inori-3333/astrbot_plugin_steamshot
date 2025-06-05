@@ -31,6 +31,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api.all import *
+# 从steam_login导入需要的函数，但不在顶层使用
+from .steam_login import apply_cookies_to_driver, get_login_status
 
 # **🔹 Steam 链接匹配正则**
 STEAM_URL_PATTERN = r"https://store\.steampowered\.com/app/(\d+)/[\w\-]+/?"
@@ -131,8 +133,8 @@ def get_chromedriver():
 
 CHROMEDRIVER_PATH = get_chromedriver()
 
-def create_driver():
-    """ 创建 Selenium WebDriver """
+def create_driver(apply_login=True, url=None):
+    """ 创建 Selenium WebDriver，支持可选的Steam登录 """
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--disable-gpu")
@@ -147,7 +149,17 @@ def create_driver():
     service.creation_flags = 0x08000000
     service.log_output = subprocess.DEVNULL
 
-    return webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=options)
+    
+    # 如果启用了登录并且传入了apply_login参数，应用Steam登录cookies
+    if apply_login:
+        from .steam_login import apply_cookies_to_driver
+        # 传入URL参数，让函数根据URL自动选择应用哪个域的cookies
+        login_applied = apply_cookies_to_driver(driver, url)
+        if login_applied:
+            print("✅ 已应用Steam登录信息")
+    
+    return driver
 
 def bypass_steam_age_check(driver):
     """
@@ -188,7 +200,8 @@ async def capture_screenshot(url, save_path):
     def run():
         driver = None
         try:
-            driver = create_driver()
+            # 修改：传递URL参数以应用正确的cookies
+            driver = create_driver(apply_login=True, url=url)
             driver.set_page_load_timeout(15)
 
             for attempt in range(3):
@@ -231,7 +244,8 @@ async def capture_screenshot(url, save_path):
 async def get_steam_workshop_info(url):
     """ 解析 Steam 创意工坊页面信息 """
     def parse():
-        driver = create_driver()
+        # 传入URL以便应用正确的cookies
+        driver = create_driver(apply_login=True, url=url)
         try:
             driver.set_page_load_timeout(15)
             for attempt in range(3):
@@ -387,7 +401,10 @@ async def process_steam_workshop(event, workshop_url):
 async def get_steam_page_info(url):
     """ 解析 Steam 商店页面信息 """
     def parse():
-        driver = create_driver()
+        # 传入URL以便应用正确的cookies
+        driver = create_driver(apply_login=True, url=url)
+        if not driver:
+            return []
         try:
             driver.set_page_load_timeout(15)
             for attempt in range(3):
@@ -468,7 +485,8 @@ async def process_steam_store(event, steam_url):
 async def get_steam_profile_info(url):
     """ 解析 Steam 个人主页信息（支持完整最新动态） """
     def parse():
-        driver = create_driver()
+        # 传入URL以便应用正确的cookies
+        driver = create_driver(apply_login=True, url=url)
         if not driver:
             return []
 
@@ -687,7 +705,8 @@ async def process_steam_profile(event, profile_url):
 async def steam_store_search(search_game_name: str, event: AstrMessageEvent):
     """访问 Steam 搜索页面并跳转第一个游戏结果"""
     url = f"https://store.steampowered.com/search/?term={search_game_name}&ndl=1"
-    driver = create_driver()
+    # 传入URL以便应用正确的cookies
+    driver = create_driver(apply_login=True, url=url)
     try:
         driver.get(url)
         time.sleep(2)
@@ -717,7 +736,8 @@ async def steam_store_search(search_game_name: str, event: AstrMessageEvent):
 async def steam_user_search(search_user_name: str, event: AstrMessageEvent):
     """搜索 Steam 用户并获取其主页 URL，传给 process_steam_profile"""
     url = f"https://steamcommunity.com/search/users/#text={search_user_name}"
-    driver = create_driver()
+    # 传入URL以便应用正确的cookies
+    driver = create_driver(apply_login=True, url=url)
     try:
         driver.get(url)
         time.sleep(2)
@@ -743,11 +763,89 @@ async def steam_user_search(search_user_name: str, event: AstrMessageEvent):
     finally:
         driver.quit()
 
+def verify_steam_login(driver):
+    """
+    验证Steam登录状态是否有效
+    参数:
+    - driver: Selenium WebDriver实例
+    返回:
+    - (bool, str): 登录状态和用户名(如有)
+    """
+    try:
+        # 访问Steam首页
+        driver.get("https://store.steampowered.com/")
+        time.sleep(2)
+        
+        # 检查登录状态 - 查找顶部导航栏中的账户名元素
+        account_menu = driver.find_element(By.ID, "account_pulldown")
+        if account_menu:
+            username = account_menu.text.strip()
+            if username and username != "登录" and username != "Sign In":
+                return True, username
+        
+        # 尝试其他方法 - 查找账户下拉菜单中是否有"查看个人资料"链接
+        try:
+            profile_link = driver.find_element(By.XPATH, "//a[contains(@href, '/profiles/') or contains(@href, '/id/')]")
+            if profile_link:
+                return True, "已登录 (未获取到用户名)"
+        except:
+            pass
+            
+        return False, "未登录"
+    except Exception as e:
+        print(f"❌ 验证Steam登录状态失败: {e}")
+        return False, f"验证失败: {str(e)}"
+
+async def test_steam_login():
+    """测试Steam登录状态"""
+    driver = None
+    try:
+        driver = create_driver(apply_login=True)
+        login_status, username = verify_steam_login(driver)
+        
+        if login_status:
+            return f"✅ Steam登录成功! 用户名: {username}"
+        else:
+            return f"❌ Steam登录失败: {username}"
+    except Exception as e:
+        return f"❌ 测试Steam登录出错: {e}"
+    finally:
+        if driver:
+            driver.quit()
 
 @register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "1.6.0", "https://github.com/inori-3333/astrbot_plugin_steamshot")
 class SteamPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config=None):
         super().__init__(context)
+        # 初始化配置
+        self.config = config or {}
+        
+        # 从配置中读取Steam登录设置
+        self.enable_steam_login = self.config.get("enable_steam_login", False)
+        self.steam_store_cookies = self.config.get("steam_store_cookies", "")
+        self.steam_community_cookies = self.config.get("steam_community_cookies", "")
+        
+        # 应用配置
+        self._apply_config()
+        
+    def _apply_config(self):
+        """应用配置到插件功能"""
+        from .steam_login import enable_steam_login, disable_steam_login, save_steam_cookies
+        
+        if self.enable_steam_login:
+            # 应用Steam商店cookies
+            if self.steam_store_cookies:
+                save_steam_cookies(self.steam_store_cookies, "store")
+                
+            # 应用Steam社区cookies
+            if self.steam_community_cookies:
+                save_steam_cookies(self.steam_community_cookies, "community")
+                
+            # 启用Steam登录
+            enable_steam_login()
+        else:
+            # 禁用Steam登录
+            disable_steam_login()
 
     @filter.regex(STEAM_URL_PATTERN)
     async def handle_steam_store(self, event: AstrMessageEvent):
@@ -789,3 +887,129 @@ class SteamPlugin(Star):
         search_user_name = args[1]
         async for result in steam_user_search(search_user_name, event):
             yield result
+
+    @filter.command("ssl")
+    async def steam_login(self, event: AstrMessageEvent):
+        """设置Steam登录状态\n用法：
+        /ssl enable - 启用Steam登录
+        /ssl disable - 禁用Steam登录
+        /ssl status - 查看当前登录状态
+        /ssl store [cookies文本] - 设置Steam商店cookies
+        /ssl community [cookies文本] - 设置Steam社区cookies
+        /ssl test - 测试Steam登录状态"""
+        # 在函数内部导入所需函数
+        from .steam_login import enable_steam_login, disable_steam_login, save_steam_cookies, get_cookie_status, test_steam_login
+        
+        args = event.message_str.split(maxsplit=1)
+        if len(args) < 2:
+            yield event.plain_result(
+                "⚠️ 请提供参数:\n"
+                "/ssl enable - 启用Steam登录\n"
+                "/ssl disable - 禁用Steam登录\n"
+                "/ssl status - 查看当前登录状态\n"
+                "/ssl store [cookies文本] - 设置Steam商店cookies\n"
+                "/ssl community [cookies文本] - 设置Steam社区cookies\n"
+                "/ssl test - 测试Steam登录状态"
+            )
+            return
+        
+        cmd = args[1].strip()
+        
+        if cmd == "enable":
+            if enable_steam_login():
+                # 更新插件配置
+                self.enable_steam_login = True
+                self.config["enable_steam_login"] = True
+                self.config.save_config()
+                yield event.plain_result("✅ 已启用Steam登录功能")
+            else:
+                yield event.plain_result("❌ 启用Steam登录功能失败")
+                
+        elif cmd == "disable":
+            if disable_steam_login():
+                # 更新插件配置
+                self.enable_steam_login = False
+                self.config["enable_steam_login"] = False
+                self.config.save_config()
+                yield event.plain_result("✅ 已禁用Steam登录功能")
+            else:
+                yield event.plain_result("❌ 禁用Steam登录功能失败")
+                
+        elif cmd == "status":
+            status = get_cookie_status()
+            yield event.plain_result(f"当前状态:\n{status}")
+                
+        elif cmd.startswith("store"):
+            parts = cmd.split(maxsplit=1)
+            if len(parts) < 2:
+                yield event.plain_result(
+                    "⚠️ 请提供Steam商店(store)的cookies文本\n"
+                    "格式如: /ssl store steamLoginSecure=xxx; steamid=xxx; ...\n\n"
+                    "获取方法:\n"
+                    "1. 在浏览器中登录Steam商店(https://store.steampowered.com)\n"
+                    "2. 按F12打开开发者工具\n"
+                    "3. 切换到'应用'/'Application'/'存储'/'Storage'标签\n"
+                    "4. 左侧选择'Cookies' > 'https://store.steampowered.com'\n"
+                    "5. 复制所有cookies内容 (至少需要包含steamLoginSecure)"
+                )
+                return
+                    
+            cookies_str = parts[1]
+            success, message = save_steam_cookies(cookies_str, "store")
+            if success:
+                # 更新插件配置
+                self.steam_store_cookies = cookies_str
+                self.config["steam_store_cookies"] = cookies_str
+                self.config.save_config()
+            yield event.plain_result(message)
+                
+        elif cmd.startswith("community"):
+            parts = cmd.split(maxsplit=1)
+            if len(parts) < 2:
+                yield event.plain_result(
+                    "⚠️ 请提供Steam社区(community)的cookies文本\n"
+                    "格式如: /ssl community steamLoginSecure=xxx; steamid=xxx; ...\n\n"
+                    "获取方法:\n"
+                    "1. 在浏览器中登录Steam社区(https://steamcommunity.com)\n"
+                    "2. 按F12打开开发者工具\n"
+                    "3. 切换到'应用'/'Application'/'存储'/'Storage'标签\n"
+                    "4. 左侧选择'Cookies' > 'https://steamcommunity.com'\n"
+                    "5. 复制所有cookies内容 (至少需要包含steamLoginSecure)"
+                )
+                return
+                    
+            cookies_str = parts[1]
+            success, message = save_steam_cookies(cookies_str, "community")
+            if success:
+                # 更新插件配置
+                self.steam_community_cookies = cookies_str
+                self.config["steam_community_cookies"] = cookies_str
+                self.config.save_config()
+            yield event.plain_result(message)
+                
+        elif cmd == "test":
+            yield event.plain_result("🔄 正在测试Steam登录状态，请稍候...")
+            result = await test_steam_login()
+            yield event.plain_result(result)
+                
+        else:
+            yield event.plain_result(
+                "⚠️ 未知命令，可用命令:\n"
+                "/ssl enable - 启用Steam登录\n"
+                "/ssl disable - 禁用Steam登录\n"
+                "/ssl status - 查看当前登录状态\n"
+                "/ssl store [cookies文本] - 设置Steam商店cookies\n"
+                "/ssl community [cookies文本] - 设置Steam社区cookies\n"
+                "/ssl test - 测试Steam登录状态"
+            )
+
+    # 在配置变更时应用新配置
+    def on_config_changed(self):
+        """当插件配置在WebUI上被修改时调用"""
+        # 读取新配置
+        self.enable_steam_login = self.config.get("enable_steam_login", False)
+        self.steam_store_cookies = self.config.get("steam_store_cookies", "")
+        self.steam_community_cookies = self.config.get("steam_community_cookies", "")
+        
+        # 应用新配置
+        self._apply_config()

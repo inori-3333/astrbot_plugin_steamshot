@@ -1,0 +1,28 @@
+{
+  "enable_steam_login": {
+    "type": "bool",
+    "title": "启用Steam登录",
+    "description": "是否启用Steam自动登录功能。启用后，插件会自动使用保存的Cookies进行登录。",
+    "default": false
+  },
+  "steam_store_cookies": {
+    "type": "string",
+    "title": "Steam商店Cookies",
+    "description": "Steam商店(store.steampowered.com)的Cookies。获取方法：在浏览器中登录Steam商店，按F12打开开发者工具，切换到'应用/Application/存储/Storage'标签，选择'Cookies' > 'https://store.steampowered.com'，复制所有cookies内容。",
+    "uiType": "textarea",
+    "uiConfig": {
+      "rows": 5,
+      "placeholder": "请粘贴Steam商店的Cookies，如：steamLoginSecure=xxx; steamid=xxx; ..."
+    }
+  },
+  "steam_community_cookies": {
+    "type": "string",
+    "title": "Steam社区Cookies",
+    "description": "Steam社区(steamcommunity.com)的Cookies。获取方法：在浏览器中登录Steam社区，按F12打开开发者工具，切换到'应用/Application/存储/Storage'标签，选择'Cookies' > 'https://steamcommunity.com'，复制所有cookies内容。",
+    "uiType": "textarea",
+    "uiConfig": {
+      "rows": 5,
+      "placeholder": "请粘贴Steam社区的Cookies，如：steamLoginSecure=xxx; steamid=xxx; ..."
+    }
+  }
+}
