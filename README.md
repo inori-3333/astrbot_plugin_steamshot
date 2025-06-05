@@ -105,6 +105,7 @@ steam创意工坊界面:
 ![步骤1](step1.png)
 ![步骤2](step2.png)
 ![步骤3](step3.png)
+![步骤4](step4.png)
 
 **注意：当你进入的是前缀为steampowered.com的steam网页时，对应的cookies是steam商店cookies；当你进入的是前缀为steamcommunity.com的网页时，对应的cookies是steam社区的cookies。请不要填错了！！！**  
 **注意：当你进入的是前缀为steampowered.com的steam网页时，对应的cookies是steam商店cookies；当你进入的是前缀为steamcommunity.com的网页时，对应的cookies是steam社区的cookies。请不要填错了！！！**  
