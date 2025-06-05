@@ -21,6 +21,7 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3472726693 # 创意工坊
 ```
 可解析的信息：
 ```
+steam商店界面:
 游戏名称
 发行时间
 开发商
@@ -30,6 +31,30 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3472726693 # 创意工坊
 游戏评分
 游戏价格
 是否支持中文（包括简体中文和繁体中文）
+
+steam个人资料界面:
+用户名称
+封禁纪录
+个人简介
+steam等级
+地区
+当前状态
+游戏数
+好友数
+最新动态
+
+steam创意工坊界面:
+游戏名称
+创意工坊作品名称
+作者名称
+作者主页链接
+作者状态
+评分
+文件大小
+创建日期
+更新日期
+标签
+描述
 ```
 ## 待实现
 - 返回与链接游戏相关的其他信息，比如从SteamDB获取的价格变化等等。
@@ -58,8 +83,8 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3472726693 # 创意工坊
 使用  /ssu  指令搜索steam用户，使用方法: /ssu + 用户名，如: /ssu m4a1_death-Dawn
 ```
 
-![使用示例4](sample5.png)
-![使用示例5](sample4.png)
+![使用示例5](sample5.png)
+![使用示例4](sample4.png)
 
 # 使用示例
 _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中新的示例。_
@@ -89,6 +114,7 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 
 ## v1.6.0
 + 新增支持steam创意工坊解析功能
+![使用示例6](sample6.png)
 
 ## v1.6.1
 + 支持解析steam主页最新动态，并改善排版
