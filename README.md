@@ -75,7 +75,12 @@ steam创意工坊界面:
 但是，您应该无需手动安装任何第三方库，也无需手动安装chrome驱动，插件会自动检测您的环境，并安装缺失的库和驱动。
 即，**唯一的必要条件：您的astrbot运行环境需要有Chrome浏览器。**
 
-## 前端使用
+## 自动检测使用示例
+_以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中新的示例。_
+![使用示例](sample.png)
+![使用示例2](sample2.png)
+
+## 指令使用指南
 根据收到的steam链接自动解析指定界面，插件会自动检测对话中出现的steam链接，并返回对应页面的网页截图和摘要信息（现仅支持steam商店界面、个人主页界面和创意工坊界面）。
 ```
 使用  /sss  指令搜索steam商店，使用方法: /sss + 游戏名，如: /sss 不/存在的你，和我
@@ -97,10 +102,10 @@ steam创意工坊界面:
 
 注意**steam商店和steam社区的cookies要分开设置**，steam商店的域名对应steampowered.com，steam社区的域名对应steamcommunity.com，**两者cookies不能通用**  
 
-**获取cookies的方法**：打开浏览器 - 进入steam网页登录你的steam账号 - 按F12调出开发人员工具 - 选择网络/Network选项 - 进入一个steam网页 - 选择名称排在最上面那个项 - 右边那个标头/header里面向下拉 - 找到请求标头/request header项 - 把其中的cookies复制  
+**获取cookies的方法**：打开浏览器 - 进入steam网页登录你的steam账号 - （按F12）调出开发者工具 - 选择网络/Network选项 - 进入一个steam网页 - 选择名称排在最上面那个项 - 右边那个标头/header里面向下拉 - 找到请求标头/request header项 - 把其中的cookies复制  
 
 这只是一种获取steam cookies的方法，其他还有很多方法，但最好填写完整的cookies，只填写部分的cookies可能会报错  
-这就是你的cookies，请保存好，不要泄露，通过指令的方式或者填入Astrbot网页图形ui中插件管理 - Check Steam-Link插件配置栏中的input输入框中  
+这就是你的cookies，请保存好，不要泄露，通过指令的方式或者填入Astrbot网页图形ui中插件管理 - Check Steam-Link 插件配置栏中的 input 输入框中  
 
 ![步骤1](step1.png)
 ![步骤2](step2.png)
@@ -111,12 +116,6 @@ steam创意工坊界面:
 **注意：当你进入的是前缀为steampowered.com的steam网页时，对应的cookies是steam商店cookies；当你进入的是前缀为steamcommunity.com的网页时，对应的cookies是steam社区的cookies。请不要填错了！！！**  
 **注意：当你进入的是前缀为steampowered.com的steam网页时，对应的cookies是steam商店cookies；当你进入的是前缀为steamcommunity.com的网页时，对应的cookies是steam社区的cookies。请不要填错了！！！**  
 **注意：当你进入的是前缀为steampowered.com的steam网页时，对应的cookies是steam商店cookies；当你进入的是前缀为steamcommunity.com的网页时，对应的cookies是steam社区的cookies。请不要填错了！！！**  
-
-
-# 使用示例
-_以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中新的示例。_
-![使用示例](sample.png)
-![使用示例2](sample2.png)
 
 
 # 更新记录
