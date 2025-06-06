@@ -1057,7 +1057,7 @@ async def test_steam_login():
         if driver:
             driver.quit()
 
-@register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "1.6.0", "https://github.com/inori-3333/astrbot_plugin_steamshot")
+@register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "1.8.2", "https://github.com/inori-3333/astrbot_plugin_steamshot")
 class SteamPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -1121,7 +1121,7 @@ class SteamPlugin(Star):
             yield response
 
     @filter.command("ssu")
-    async def steam_steam_user(self, event: AstrMessageEvent):
+    async def search_steam_user(self, event: AstrMessageEvent):
         """搜索 Steam 用户信息\n用法：/ssu 用户名"""
         args = event.message_str.split(maxsplit=1)
         if len(args) < 2:
