@@ -1,10 +1,10 @@
 
-# Check Steam-Link V1.8.1
+# Check Steam-Link V1.8.2
 
 + 一个AstrBot插件。A plugin for AstrBot.
 > 如果您觉得对您有用，请点一个star，我会学猫娘叫。
 ![使用示例](star.png)
-> 当前版本：v1.8.1
+> 当前版本：v1.8.2
 
 # 功能介绍
 ## 已实现
@@ -167,6 +167,9 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 ## v1.8.1
 + 修复了登录状态下steam商店敏感游戏验证无法跳过的问题
 + 修复了登录状态下steam商店可能有些游戏搜不到的问题
+
+## v1.8.2
++ 优化了steam商店界面价格部分的解析
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)

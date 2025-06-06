@@ -453,6 +453,9 @@ async def process_steam_workshop(event, workshop_url):
 async def get_steam_page_info(url):
     """ 解析 Steam 商店页面信息 """
     def parse():
+        # 导入Tag类用于类型检查
+        from bs4.element import Tag
+        
         # 传入URL以便应用正确的cookies
         driver = create_driver(apply_login=True, url=url)
         if not driver:
@@ -487,7 +490,6 @@ async def get_steam_page_info(url):
                     # **🔥 直接获取纯文本，并去掉前缀 "发行商:"**
                     publisher = next_div.get_text(strip=True).replace("发行商:", "").strip()
 
-
             tags = soup.select("a.app_tag")
             tags = "，".join([tag.text.strip() for tag in tags[:5]]) if tags else "未知"
 
@@ -497,8 +499,158 @@ async def get_steam_page_info(url):
             review_summary = soup.find("span", class_="game_review_summary")
             review_summary = review_summary.text.strip() if review_summary else "暂无评分"
 
-            price = soup.find("div", class_="discount_final_price") or soup.find("div", class_="game_purchase_price")
-            price = price.text.strip() if price else "暂无售价"
+            # 修改价格解析逻辑
+            price_items = []
+            
+            try:
+                # 找到游戏购买区域
+                purchase_area = soup.find("div", id="game_area_purchase")
+                if purchase_area:
+                    print("✅ 找到游戏购买区域")
+                    
+                    # 获取所有购买选项包装器，但排除DLC部分
+                    purchase_wrappers = []
+                    
+                    for child in purchase_area.children:
+                        if not isinstance(child, Tag):
+                            continue
+                        
+                        # 一旦遇到DLC部分，停止收集
+                        if child.get("id") == "gameAreaDLCSection":
+                            print("✅ 找到DLC部分，停止收集购买选项")
+                            break
+                        
+                        if "game_area_purchase_game_wrapper" in child.get("class", []):
+                            purchase_wrappers.append(child)
+                    
+                    print(f"✅ 找到 {len(purchase_wrappers)} 个购买选项")
+                    
+                    # 处理每个购买选项
+                    for i, wrapper in enumerate(purchase_wrappers):
+                        try:
+                            # 跳过下拉框部分
+                            if wrapper.find("div", class_="game_purchase_sub_dropdown"):
+                                print(f"⏩ 跳过第 {i+1} 个购买选项，因为它是下拉框")
+                                continue
+                            
+                            # 处理动态捆绑包
+                            if "dynamic_bundle_description" in wrapper.get("class", []):
+                                print(f"🔍 第 {i+1} 个购买选项是动态捆绑包")
+                                
+                                # 查找捆绑包标题
+                                bundle_title_elem = wrapper.find("h2", class_="title")
+                                if not bundle_title_elem:
+                                    print(f"⚠️ 第 {i+1} 个捆绑包没有找到标题元素")
+                                    continue
+                                
+                                # 清理捆绑包标题，移除多余文本
+                                bundle_title = bundle_title_elem.get_text(strip=True)
+                                if bundle_title.startswith("购买 "):
+                                    bundle_title = bundle_title[3:]
+                                
+                                # 移除可能的"(?)"符号
+                                bundle_title = bundle_title.replace("(?)", "").strip()
+                                
+                                print(f"📦 捆绑包标题: {bundle_title}")
+                                
+                                # 检查是否已完成合集
+                                collection_complete = wrapper.find("span", class_="collectionComplete")
+                                if collection_complete:
+                                    print(f"✓ 捆绑包 \"{bundle_title}\" 已完成合集")
+                                    price_items.append(f"{bundle_title}   已完成合集")
+                                    continue
+                                
+                                # 获取折扣和价格
+                                discount_block = wrapper.find("div", class_="discount_block")
+                                if discount_block:
+                                    discount_pct = discount_block.find("div", class_="bundle_base_discount")
+                                    final_price = discount_block.find("div", class_="discount_final_price")
+                                    
+                                    if discount_pct and final_price:
+                                        # 清理价格文本，确保格式正确
+                                        discount_text = discount_pct.text.strip()
+                                        price_text = final_price.text.strip()
+                                        # 如果价格文本包含"您的价格："，只保留价格部分
+                                        if "您的价格：" in price_text:
+                                            price_parts = price_text.split("您的价格：")
+                                            price_text = price_parts[-1].strip()
+                                        
+                                        formatted_price = f"{bundle_title}   {discount_text}   {price_text}"
+                                        print(f"💲 捆绑包价格: {formatted_price}")
+                                        price_items.append(formatted_price)
+                                    elif final_price:
+                                        price_text = final_price.text.strip()
+                                        # 如果价格文本包含"您的价格："，只保留价格部分
+                                        if "您的价格：" in price_text:
+                                            price_parts = price_text.split("您的价格：")
+                                            price_text = price_parts[-1].strip()
+                                            
+                                        formatted_price = f"{bundle_title}   {price_text}"
+                                        print(f"💲 捆绑包价格: {formatted_price}")
+                                        price_items.append(formatted_price)
+                                
+                                continue
+                            
+                            # 处理普通游戏购买选项
+                            print(f"🔍 第 {i+1} 个购买选项是普通游戏")
+                            
+                            game_purchase = wrapper.find("div", class_="game_area_purchase_game")
+                            if not game_purchase:
+                                print(f"⚠️ 第 {i+1} 个购买选项没有找到game_area_purchase_game元素")
+                                continue
+                            
+                            title_elem = game_purchase.find("h2", class_="title")
+                            if not title_elem:
+                                print(f"⚠️ 第 {i+1} 个购买选项没有找到标题元素")
+                                continue
+                            
+                            title = title_elem.text.strip()
+                            if title.startswith("购买 "):
+                                title = title[3:]
+                            
+                            print(f"🎮 游戏标题: {title}")
+                            
+                            # 检查是否在库中
+                            in_library = game_purchase.find("div", class_="package_in_library_flag")
+                            
+                            if in_library:
+                                print(f"✓ 游戏 \"{title}\" 已在库中")
+                                price_items.append(f"{title}   在库中")
+                                continue
+                            
+                            # 获取价格信息
+                            discount_block = game_purchase.find("div", class_="discount_block")
+                            regular_price = game_purchase.find("div", class_="game_purchase_price")
+                            
+                            if discount_block:
+                                discount_pct = discount_block.find("div", class_="discount_pct")
+                                final_price = discount_block.find("div", class_="discount_final_price")
+                                
+                                if discount_pct and final_price:
+                                    price_text = f"{title}   {discount_pct.text.strip()}   {final_price.text.strip()}"
+                                    print(f"💲 折扣价格: {price_text}")
+                                    price_items.append(price_text)
+                                elif final_price:
+                                    price_text = f"{title}   {final_price.text.strip()}"
+                                    print(f"💲 最终价格: {price_text}")
+                                    price_items.append(price_text)
+                            elif regular_price:
+                                price_text = f"{title}   {regular_price.text.strip()}"
+                                print(f"💲 常规价格: {price_text}")
+                                price_items.append(price_text)
+                            else:
+                                print(f"⚠️ 游戏 \"{title}\" 没有找到价格信息")
+                                price_items.append(f"{title}   价格未知")
+                        except Exception as e:
+                            print(f"❌ 处理第 {i+1} 个购买选项时出错: {e}")
+                            continue
+                else:
+                    print("⚠️ 没有找到游戏购买区域")
+            except Exception as e:
+                print(f"❌ 解析价格信息时出错: {e}")
+            
+            # 格式化价格信息
+            price_text = "\n".join(price_items) if price_items else "暂无售价"
 
             return {
                 "🎮 游戏名称": game_name,
@@ -508,7 +660,7 @@ async def get_steam_page_info(url):
                 "🎭 游戏类别": tags,
                 "📜 简介": description,
                 "⭐ 评分": review_summary,
-                "💰 价格": price
+                "💰 价格": f"\n{price_text}"
             }
 
         finally:
@@ -905,7 +1057,7 @@ async def test_steam_login():
         if driver:
             driver.quit()
 
-@register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "1.6.0", "https://github.com/inori-3333/astrbot_plugin_steamshot")
+@register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "1.8.2", "https://github.com/inori-3333/astrbot_plugin_steamshot")
 class SteamPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
