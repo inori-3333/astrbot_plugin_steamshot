@@ -163,37 +163,89 @@ def create_driver(apply_login=True, url=None):
 
 def bypass_steam_age_check(driver):
     """
-    自动处理 Steam 年龄验证页面。如果当前页面是年龄验证页，填写出生日期并跳转。
+    自动处理 Steam 年龄验证页面和敏感内容验证页面。
+    如果当前页面是验证页，自动填写信息并跳转。
     """
     try:
+        # 检查当前URL是否包含agecheck关键字
         if "agecheck" not in driver.current_url:
-            return  # 不是年龄验证页面，直接返回
+            return  # 不是验证页面，直接返回
 
-        print("🔞 检测到 Steam 年龄验证页面，正在自动跳过...")
-
-        # 等待出生日期下拉框出现
-        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.ID, "ageYear")))
-
-        # 选择出生日期
-        Select(driver.find_element(By.ID, "ageYear")).select_by_visible_text("2000")
-
+        # 检查页面内容判断是哪种验证类型
+        # 方法1：检查是否存在年龄下拉框(常规年龄验证)
+        is_age_verification = False
+        is_content_verification = False
+        
+        try:
+            # 先尝试检测常规年龄验证页面特有元素
+            if driver.find_elements(By.ID, "ageYear"):
+                is_age_verification = True
+                print("🔞 检测到 Steam 年龄验证页面，正在自动跳过...")
+            # 检测敏感内容验证页面特有元素
+            elif driver.find_elements(By.ID, "app_agegate") and driver.find_elements(By.ID, "view_product_page_btn"):
+                is_content_verification = True
+                print("🔞 检测到 Steam 敏感内容验证页面，正在自动跳过...")
+        except:
+            # 如果上述检测失败，尝试通过页面源码判断
+            page_source = driver.page_source
+            if "ageYear" in page_source:
+                is_age_verification = True
+                print("🔞 检测到 Steam 年龄验证页面，正在自动跳过...")
+            elif "app_agegate" in page_source and "view_product_page_btn" in page_source:
+                is_content_verification = True
+                print("🔞 检测到 Steam 敏感内容验证页面，正在自动跳过...")
+        
         # 保存跳转前的 URL
         before_url = driver.current_url
-
-        # 尝试执行 JS 跳转函数
-        driver.execute_script("ViewProductPage()")
-
+        
+        # 处理常规年龄验证
+        if is_age_verification:
+            # 等待出生日期下拉框出现
+            WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.ID, "ageYear")))
+            
+            # 选择出生日期
+            Select(driver.find_element(By.ID, "ageYear")).select_by_visible_text("2000")
+            
+            # 尝试执行 JS 跳转函数
+            driver.execute_script("ViewProductPage()")
+        
+        # 处理敏感内容验证
+        elif is_content_verification:
+            # 尝试直接点击"查看页面"按钮
+            try:
+                view_btn = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.ID, "view_product_page_btn"))
+                )
+                view_btn.click()
+            except:
+                # 如果按钮点击失败，尝试执行JS函数
+                driver.execute_script("ViewProductPage()")
+        
+        else:
+            # 如果无法确定验证类型，但确实在agecheck页面，尝试通用方法
+            print("⚠️ 未能识别验证类型，尝试通用方法跳转...")
+            try:
+                # 尝试执行 JS 跳转函数 (两种验证页面都使用这个函数)
+                driver.execute_script("ViewProductPage()")
+            except:
+                # 尝试点击任何可能的"查看页面"按钮
+                buttons = driver.find_elements(By.CSS_SELECTOR, ".btnv6_blue_hoverfade")
+                for button in buttons:
+                    if "查看" in button.text:
+                        button.click()
+                        break
+        
         # 等待 URL 发生变化，表示跳转成功
         WebDriverWait(driver, 10).until(EC.url_changes(before_url))
         print("✅ 已跳转至游戏页面")
 
-        # 再等待游戏名称加载出来
+        # 等待游戏页面加载完成 (寻找游戏名称元素)
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "apphub_AppName"))
         )
 
     except Exception as e:
-        print(f"⚠️ Steam 年龄验证跳过失败: {e}")
+        print(f"⚠️ Steam 验证页面跳过失败: {e}")
 
 async def capture_screenshot(url, save_path):
     """ 截取网页完整截图（支持懒加载内容） """
@@ -702,36 +754,76 @@ async def process_steam_profile(event, profile_url):
 
     await event.send(result)
 
+
 async def steam_store_search(search_game_name: str, event: AstrMessageEvent):
     """访问 Steam 搜索页面并跳转第一个游戏结果"""
-    url = f"https://store.steampowered.com/search/?term={search_game_name}&ndl=1"
-    # 传入URL以便应用正确的cookies
-    driver = create_driver(apply_login=True, url=url)
+    # 初始化返回值
+    result_found = False
+    
+    # 尝试使用登录状态搜索
     try:
-        driver.get(url)
-        time.sleep(2)
-
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-
-        # 检查是否没有结果
-        no_result_div = soup.select_one("#search_results .search_results_count")
-        if no_result_div and "0 个匹配的搜索结果" in no_result_div.text:
-            yield event.plain_result(f"❌ 没有找到名为 {search_game_name} 的游戏。")
-            return
-
-        # 查找第一条游戏链接
-        result_container = soup.select_one("#search_resultsRows a")
-        if result_container and result_container.has_attr("href"):
-            game_url = result_container["href"]
-            yield event.plain_result(f"🔍 正在解析符合条件的第一款游戏...\n🌐 链接：{game_url}")
-            await process_steam_store(event, game_url)
-        else:
-            yield event.plain_result("⚠️ 未能找到有效的游戏搜索结果。")
-
+        # 1. 先尝试使用登录状态搜索
+        yield event.plain_result(f"🔍 正在搜索游戏: {search_game_name}...")
+        login_driver = create_driver(apply_login=True, url="https://store.steampowered.com/")
+        url = f"https://store.steampowered.com/search/?term={search_game_name}&ndl=1"
+        
+        try:
+            login_driver.get(url)
+            time.sleep(2)
+            
+            soup = BeautifulSoup(login_driver.page_source, "html.parser")
+            
+            # 检查是否有结果
+            no_result_div = soup.select_one("#search_results .search_results_count")
+            login_has_results = not (no_result_div and "0 个匹配的搜索结果" in no_result_div.text)
+            
+            # 如果登录状态有结果
+            if login_has_results:
+                result_container = soup.select_one("#search_resultsRows a")
+                if result_container and result_container.has_attr("href"):
+                    game_url = result_container["href"]
+                    yield event.plain_result(f"✅ 找到游戏!\n🌐 链接：{game_url}")
+                    await process_steam_store(event, game_url)
+                    result_found = True
+                    return
+        finally:
+            login_driver.quit()
+            
+        # 如果登录状态下没有找到结果，可能是由于年龄限制或地区限制
+        if not result_found:
+            yield event.plain_result("⚠️ 登录状态下未找到游戏，尝试匿名搜索...")
+            
+            # 2. 尝试使用匿名状态搜索（不使用登录信息）
+            anonymous_driver = create_driver(apply_login=False, url="https://store.steampowered.com/")
+            
+            try:
+                anonymous_driver.get(url)
+                time.sleep(2)
+                
+                soup = BeautifulSoup(anonymous_driver.page_source, "html.parser")
+                
+                # 检查是否有结果
+                no_result_div = soup.select_one("#search_results .search_results_count")
+                if no_result_div and "0 个匹配的搜索结果" in no_result_div.text:
+                    yield event.plain_result(f"❌ 没有找到名为 {search_game_name} 的游戏。")
+                    return
+                
+                # 查找第一条游戏链接
+                result_container = soup.select_one("#search_resultsRows a")
+                if result_container and result_container.has_attr("href"):
+                    game_url = result_container["href"]
+                    yield event.plain_result(f"✅ 匿名搜索找到游戏!\n🌐 链接：{game_url}")
+                    
+                    # 对于找到的游戏，使用带登录的会话访问（以便能够绕过年龄验证）
+                    await process_steam_store(event, game_url)
+                    result_found = True
+                else:
+                    yield event.plain_result("⚠️ 未能找到有效的游戏搜索结果。")
+            finally:
+                anonymous_driver.quit()
+                
     except Exception as e:
         yield event.plain_result(f"❌ 搜索失败: {e}")
-    finally:
-        driver.quit()
 
 async def steam_user_search(search_user_name: str, event: AstrMessageEvent):
     """搜索 Steam 用户并获取其主页 URL，传给 process_steam_profile"""
@@ -877,7 +969,7 @@ class SteamPlugin(Star):
             yield response
 
     @filter.command("ssu")
-    async def search_steam_user(self, event: AstrMessageEvent):
+    async def steam_steam_user(self, event: AstrMessageEvent):
         """搜索 Steam 用户信息\n用法：/ssu 用户名"""
         args = event.message_str.split(maxsplit=1)
         if len(args) < 2:
