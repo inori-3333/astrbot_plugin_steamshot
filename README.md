@@ -3,7 +3,7 @@
 
 + 一个AstrBot插件。A plugin for AstrBot.
 > 如果您觉得对您有用，请点一个star，我会学猫娘叫。
-
+![使用示例](star.png)
 > 当前版本：v1.8.1
 
 # 功能介绍
