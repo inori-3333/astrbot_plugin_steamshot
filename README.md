@@ -1,10 +1,10 @@
 
-# Check Steam-Link V1.8.0
+# Check Steam-Link V1.8.1
 
 + 一个AstrBot插件。A plugin for AstrBot.
 > 如果您觉得对您有用，请点一个star，我会学猫娘叫。
 
-> 当前版本：v1.8.0
+> 当前版本：v1.8.1
 
 # 功能介绍
 ## 已实现
@@ -107,6 +107,9 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 这只是一种获取steam cookies的方法，其他还有很多方法，但最好填写完整的cookies，只填写部分的cookies可能会报错  
 这就是你的cookies，请保存好，不要泄露，通过指令的方式或者填入Astrbot网页图形ui中插件管理 - Check Steam-Link 插件配置栏中的 input 输入框中  
 
+**强烈建议您在获取steam cookies前，配置好您的偏好设置，避免搜索时出现不必要的bug**
+![偏好](preferences.png)
+
 ![步骤1](step1.png)
 ![步骤2](step2.png)
 ![步骤3](step3.png)
@@ -160,6 +163,10 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 
 ## v1.8.0
 + 新增支持通过保存cookies的方式登录steam（注意：steam商店和steam社区两个的cookies不一样，请不要填错了）
+
+## v1.8.1
++ 修复了登录状态下steam商店敏感游戏验证无法跳过的问题
++ 修复了登录状态下steam商店可能有些游戏搜不到的问题
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
