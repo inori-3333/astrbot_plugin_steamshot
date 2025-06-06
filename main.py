@@ -969,7 +969,7 @@ class SteamPlugin(Star):
             yield response
 
     @filter.command("ssu")
-    async def steam_steam_user(self, event: AstrMessageEvent):
+    async def search_steam_user(self, event: AstrMessageEvent):
         """搜索 Steam 用户信息\n用法：/ssu 用户名"""
         args = event.message_str.split(maxsplit=1)
         if len(args) < 2:
