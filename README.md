@@ -1,5 +1,20 @@
-
 # Check Steam-Link V1.8.5
+
+<div align="center">
+
+[![License: MIT](https://img.shields.io/badge/License-AGPL3.0-blue.svg)](https://opensource.org/licenses/AGPL3.0)
+![Platform](https://img.shields.io/badge/Platform-Windows-lightblue)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen)](README.md)
+[![Contributors](https://img.shields.io/github/contributors/inori-3333/astrbot_plugin_steamshot?color=green)](https://github.com/inori-3333/astrbot_plugin_steamshot/graphs/contributors)
+[![Last Commit](https://img.shields.io/github/last-commit/inori-3333/astrbot_plugin_steamshot)](https://github.com/inori-3333/astrbot_plugin_steamshot/commits/main)
+
+</div>
+
+<div align="center">
+
+[![Moe Counter](https://count.getloli.com/get/@astrbot_plugin_steamshot?theme=moebooru)](https://github.com/inori-3333/astrbot_plugin_steamshot)
+
+</div>
 
 + 一个AstrBot插件。A plugin for AstrBot.
 > 如果您觉得对您有用，请点一个star，我会学猫娘叫。
