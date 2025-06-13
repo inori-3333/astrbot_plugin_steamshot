@@ -1,4 +1,4 @@
-# Check Steam-Link V1.8.2
+# Check Steam-Link V1.8.5
 
 <div align="center">
 
@@ -19,7 +19,7 @@
 + 一个AstrBot插件。A plugin for AstrBot.
 > 如果您觉得对您有用，请点一个star，我会学猫娘叫。
 ![使用示例](star.png)
-> 当前版本：v1.8.2
+> 当前版本：v1.8.5
 
 # 功能介绍
 ## 已实现
@@ -75,7 +75,7 @@ steam创意工坊界面:
 - 返回与链接游戏相关的其他信息，比如从SteamDB获取的价格变化等等。
 - 支持参数设置，比如是否需要返回截图，截屏的宽度和高度，返回摘要的详细等级等等。
 - 支持解析steam个人隐私允许条件下的所有steam好友的状态，比如好友是否在线，好友正在玩什么游戏等等。
-- 支持在搜索steam商店和用户时，返回前x个选项（若有），通过回复指定序号解析指定页面
+- 支持在搜索steam商店和用户时，有翻页的选项
 
 # 使用方法
 ## 软件依赖
@@ -135,6 +135,11 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 **注意：当你进入的是前缀为steampowered.com的steam网页时，对应的cookies是steam商店cookies；当你进入的是前缀为steamcommunity.com的网页时，对应的cookies是steam社区的cookies。请不要填错了！！！**  
 **注意：当你进入的是前缀为steampowered.com的steam网页时，对应的cookies是steam商店cookies；当你进入的是前缀为steamcommunity.com的网页时，对应的cookies是steam社区的cookies。请不要填错了！！！**  
 
+# 已知问题
+
++ 使用steam登录功能时，cookies有效期只有差不多48小时，48小时后需要更换cookies，猜测是48小时刷新一次cookies，现阶段无法解决，等后续适配steam web api方案
++ 解析个人主页时，可能会返回```⚠️ 无法获取个人主页部分信息 + 个人主页截图```，再试1-2次就能正常解析，这个问题无法稳定复现，无有效解决方式，猜测是因为个人主页太多gif导致网页未能完全加载
++ 使用/sss和/ssu指令时返回```❌ 搜索失败: 502, message='Attempt to decode JSON with unexpected mimetype: ', url='https://t2i.soulter.top/text2img/generate'```重试1-2次即可正常使用
 
 # 更新记录
 ## v1.2.0
@@ -185,6 +190,10 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 
 ## v1.8.2
 + 优化了steam商店界面价格部分的解析
+
+## v1.8.5
++ 支持搜索商店和用户时从符合条件的前10项中选择的功能
++ 修复了免费游戏和预购游戏价格可能无法解析的问题
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)
