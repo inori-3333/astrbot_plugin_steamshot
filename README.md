@@ -1,4 +1,4 @@
-# Check Steam-Link V1.8.5
+# Check_Steam-Link V1.8.6
 
 <div align="center">
 
@@ -19,7 +19,7 @@
 + 一个AstrBot插件。A plugin for AstrBot.
 > 如果您觉得对您有用，请点一个star，我会学猫娘叫。
 ![使用示例](star.png)
-> 当前版本：v1.8.5
+> 当前版本：v1.8.6
 
 # 功能介绍
 ## 已实现
@@ -140,6 +140,7 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 + 使用steam登录功能时，cookies有效期只有差不多48小时，48小时后需要更换cookies，猜测是48小时刷新一次cookies，现阶段无法解决，等后续适配steam web api方案
 + 解析个人主页时，可能会返回```⚠️ 无法获取个人主页部分信息 + 个人主页截图```，再试1-2次就能正常解析，这个问题无法稳定复现，无有效解决方式，猜测是因为个人主页太多gif导致网页未能完全加载
 + 使用/sss和/ssu指令时返回```❌ 搜索失败: 502, message='Attempt to decode JSON with unexpected mimetype: ', url='https://t2i.soulter.top/text2img/generate'```重试1-2次即可正常使用
+> 如果有其他问题，请提issue，并附上报错原因，你的系统版本和python版本
 
 # 更新记录
 ## v1.2.0
@@ -194,6 +195,9 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 ## v1.8.5
 + 支持搜索商店和用户时从符合条件的前10项中选择的功能
 + 修复了免费游戏和预购游戏价格可能无法解析的问题
+
+## v1.8.6
++ 修复了低版本pyhton可能会因为语法报错的问题
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)

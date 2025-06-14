@@ -878,7 +878,7 @@ async def get_steam_profile_info(url):
                     if "封禁于" in line:
                         ban_records.append(line.strip())
                 if ban_records:
-                    standard_profile_lines.append(f"🚫 封禁纪录: \n{'\n'.join(ban_records)}")
+                    standard_profile_lines.append(f"🚫 封禁纪录: \n" + "\n".join(ban_records))
 
             # 2. 私密资料判断
             is_private = False
