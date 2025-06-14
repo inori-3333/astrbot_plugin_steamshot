@@ -1,4 +1,4 @@
-# Check Steam-Link V1.8.5
+# Check_Steam-Link V1.8.6
 
 <div align="center">
 
@@ -19,7 +19,7 @@
 + 一个AstrBot插件。A plugin for AstrBot.
 > 如果您觉得对您有用，请点一个star，我会学猫娘叫。
 ![使用示例](star.png)
-> 当前版本：v1.8.5
+> 当前版本：v1.8.6
 
 # 功能介绍
 ## 已实现
