@@ -990,7 +990,7 @@ async def test_steam_login():
         if driver:
             driver.quit()
 
-@register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "1.8.5", "https://github.com/inori-3333/astrbot_plugin_steamshot")
+@register("astrbot_plugin_steamshot", "Inori-3333", "检测 Steam 链接，截图并返回游戏信息", "v1.8.8", "https://github.com/inori-3333/astrbot_plugin_steamshot")
 class SteamPlugin(Star):
 
     # 定义 HTML 模板
