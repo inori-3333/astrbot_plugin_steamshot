@@ -19,7 +19,7 @@
 + 一个AstrBot插件。A plugin for AstrBot.
 > 如果您觉得对您有用，请点一个star，我会学猫娘叫。
 ![使用示例](star.png)
-> 当前版本：v1.8.7
+> 当前版本：v1.8.8
 
 # 功能介绍
 ## 已实现
@@ -27,6 +27,7 @@
 - steam商店页链接
 - steam个人主页链接
 - steam创意工坊链接
+- 单条消息中最多自动处理 3 个 Steam 链接
 
   目前支持的格式如下：
 ```
@@ -46,6 +47,9 @@ steam商店界面:
 游戏评分
 游戏价格
 是否支持中文（包括简体中文和繁体中文）
+当前在线人数
+DLC数量
+历史低价、当前多商店低价、近期 Steam 价格变动（需 IsThereAnyDeal API Key，近期价格需 detailed 摘要）
 
 steam个人资料界面:
 用户名称
@@ -57,6 +61,7 @@ steam等级
 游戏数
 好友数
 最新动态
+好友在线概览（需 Steam Web API Key 且好友列表公开）
 
 steam创意工坊界面:
 游戏名称
@@ -72,10 +77,7 @@ steam创意工坊界面:
 描述
 ```
 ## 待实现
-- 返回与链接游戏相关的其他信息，比如从SteamDB获取的价格变化等等。
-- 支持参数设置，比如是否需要返回截图，截屏的宽度和高度，返回摘要的详细等级等等。
-- 支持解析steam个人隐私允许条件下的所有steam好友的状态，比如好友是否在线，好友正在玩什么游戏等等。
-- 支持在搜索steam商店和用户时，有翻页的选项
+- 图形化价格曲线、价格提醒等更完整价格能力（当前已支持通过 IsThereAnyDeal 查询历史低价、当前多商店低价，detailed 摘要下可展示近期 Steam 价格变动）。
 
 # 使用方法
 ## 软件依赖
@@ -117,6 +119,7 @@ docker compose up -d
 - `STEAMSHOT_CHROMEDRIVER_BIN`：Chromedriver 可执行文件路径
 - `STEAMSHOT_BROWSER_KIND`：`auto|chrome|chromium`（默认 `auto`）
 - `STEAMSHOT_SKIP_WDM`：`1/0`，`1` 表示禁用 `webdriver-manager` 下载
+- `STEAMSHOT_DATA_DIR`：插件数据目录（默认 `./data/plugins/astrbot_plugin_steamshot`）
 
 常见排障：
 - 容器日志若出现 `无法解析 ChromeDriver`，请检查浏览器/驱动是否安装，或显式设置 `STEAMSHOT_CHROMEDRIVER_BIN`
@@ -134,6 +137,39 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 使用  /sss  指令搜索steam商店，使用方法: /sss + 游戏名，如: /sss 不/存在的你，和我
 使用  /ssu  指令搜索steam用户，使用方法: /ssu + 用户名，如: /ssu m4a1_death-Dawn
 ```
+搜索结果支持翻页：回复 `n` / `下一页` 查看下一页，回复 `p` / `上一页` 返回上一页；回复序号进入对应详情页。
+
+用户搜索翻页示例：
+![用户搜索翻页示例](sample_ssu_pagination.png)
+
+选择用户后，个人主页基础摘要与好友在线概览示例：
+![个人主页 API 与好友在线概览示例](sample_profile_api_friends.png)
+
+商店搜索示例：
+![商店搜索示例](sample_sss_pagination.png)
+
+选择游戏后，商店摘要与历史低价、当前低价示例：
+![商店价格摘要示例](sample_store_price_summary.png)
+
+## 可配置项
+插件配置中支持以下运行参数：
+- `use_steam_api`：商店页和个人主页摘要优先使用 Steam 官方 API，失败时自动回退网页解析
+- `steam_api_key`：可选，个人主页 API 摘要和好友状态解析需要填写；商店页无需填写
+- `show_friends`：是否在个人主页摘要中追加好友在线概览，需 Steam Web API Key 且目标好友列表公开
+- `friends_status_limit`：好友在线概览最多展示多少位在线/游戏中的好友，默认 `10`
+- `show_price_history`：是否在商店页摘要中追加历史低价，需 IsThereAnyDeal API Key
+- `itad_api_key`：可选，用于查询历史低价
+- `itad_country`：IsThereAnyDeal 查询价格时使用的国家/地区代码，默认 `CN`
+- `price_current_limit`：当前多商店低价展示数量，默认 `3`
+- `price_history_limit`：`detailed` 摘要下近期 Steam 价格变动展示数量，默认 `5`
+- `return_screenshot`：是否返回截图，关闭后只返回文字摘要以减少耗时
+- `screenshot_width`：截图宽度，默认 `1440`
+- `screenshot_max_height`：截图最大高度，默认 `20000`，用于避免超长页面生成过大图片
+- `screenshot_scroll_limit`：懒加载滚动次数上限，默认 `15`
+- `summary_detail_level`：摘要详细程度，支持 `simple` / `standard` / `detailed`
+- `cache_ttl_store`：商店摘要缓存秒数，默认 `1800`，`0` 表示禁用
+- `cache_ttl_profile`：个人主页摘要缓存秒数，默认 `300`，`0` 表示禁用
+- `cache_ttl_workshop`：创意工坊摘要缓存秒数，默认 `600`，`0` 表示禁用
 
 ![使用示例5](sample5.png)
 ![使用示例4](sample4.png)
@@ -155,6 +191,10 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 这只是一种获取steam cookies的方法，其他还有很多方法，但最好填写完整的cookies，只填写部分的cookies可能会报错  
 这就是你的cookies，请保存好，不要泄露，通过指令的方式或者填入Astrbot网页图形ui中插件管理 - Check Steam-Link 插件配置栏中的 input 输入框中  
 
+**安全提醒：cookies 内的 `steamLoginSecure` 等字段相当于短期登录凭据，请不要公开截图或日志；建议使用单独账号配置插件。**
+
+插件会将 Cookie 配置框作为密码框展示，并在本地保存 `auth/steam_cookies.json` 时尽力收紧认证目录与文件权限、采用原子写入减少异常中断导致的文件损坏。权限保护不能替代账号隔离，仍不建议在公共机器上保存主账号 Cookie。
+
 **强烈建议您在获取steam cookies前，配置好您的偏好设置，避免搜索时出现不必要的bug**
 ![偏好](preferences.png)
 
@@ -169,7 +209,7 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 # 已知问题
 
 + 使用steam登录功能时，cookies有效期只有差不多48小时，48小时后需要更换cookies，猜测是48小时刷新一次cookies，现阶段无法解决，等后续适配steam web api方案
-+ 解析个人主页时，可能会返回```⚠️ 无法获取个人主页部分信息 + 个人主页截图```，再试1-2次就能正常解析，这个问题无法稳定复现，无有效解决方式，猜测是因为个人主页太多gif导致网页未能完全加载
++ 未配置 Steam Web API Key 时，个人主页仍以网页解析为主，可能会返回```⚠️ 无法获取个人主页部分信息 + 个人主页截图```，再试1-2次通常可恢复；配置 API Key 后会优先使用官方 API 获取基础摘要
 + 使用/sss和/ssu指令时返回```❌ 搜索失败: 502, message='Attempt to decode JSON with unexpected mimetype: ', url='https://t2i.soulter.top/text2img/generate'```重试1-2次即可正常使用
 > 如果有其他问题，请提issue，并附上报错原因，你的系统版本和python版本
 
@@ -238,6 +278,16 @@ _以下两个示例为v1.0.0版本，当前使用效果请查看更新日志中�
 ### v1.8.8
 + 修复元信息与主程序中的版本
 + 新增CHANGELOG.md和logo.png
+
+### 待发布
++ 优化 Steam 页面渲染流程，减少重复启动浏览器与重复加载页面
++ 商店页摘要优先使用 Steam 官方 API，并新增中文支持、当前在线人数、DLC 数量等字段
++ 新增商店、个人主页、创意工坊摘要缓存及截图开关、截图宽高上限等配置
++ `/sss` 与 `/ssu` 搜索结果支持上一页/下一页翻页选择
++ 个人主页支持通过 Steam Web API 获取基础摘要和好友在线概览
++ 商店页可选通过 IsThereAnyDeal 追加历史低价、当前多商店低价和 detailed 摘要下的近期 Steam 价格变动
++ 强化 Cookie 配置展示与本地认证文件权限，降低明文凭据泄露风险
++ 修复部分创意工坊页面加载超时时直接返回 ChromeDriver Stacktrace 的问题
 
 # 支持
 [帮助文档](https://github.com/inori-3333/astrbot_plugin_steamshot)

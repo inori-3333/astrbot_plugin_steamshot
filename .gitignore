@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+
+.agents/
+.codex/
+
+data/
+chromedriver_path.txt
+
+*.log
+.env
+.env.*

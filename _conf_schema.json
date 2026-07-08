@@ -9,9 +9,8 @@
     "type": "string",
     "title": "Steam商店Cookies",
     "description": "Steam商店(store.steampowered.com)的Cookies。获取方法：在浏览器中登录Steam商店，按F12打开开发者工具，切换到'应用/Application/存储/Storage'标签，选择'Cookies' > 'https://store.steampowered.com'，复制所有cookies内容。",
-    "uiType": "textarea",
+    "uiType": "password",
     "uiConfig": {
-      "rows": 5,
       "placeholder": "请粘贴Steam商店的Cookies，如：steamLoginSecure=xxx; steamid=xxx; ..."
     }
   },
@@ -19,10 +18,118 @@
     "type": "string",
     "title": "Steam社区Cookies",
     "description": "Steam社区(steamcommunity.com)的Cookies。获取方法：在浏览器中登录Steam社区，按F12打开开发者工具，切换到'应用/Application/存储/Storage'标签，选择'Cookies' > 'https://steamcommunity.com'，复制所有cookies内容。",
-    "uiType": "textarea",
+    "uiType": "password",
     "uiConfig": {
-      "rows": 5,
       "placeholder": "请粘贴Steam社区的Cookies，如：steamLoginSecure=xxx; steamid=xxx; ..."
     }
+  },
+  "use_steam_api": {
+    "type": "bool",
+    "title": "优先使用Steam官方API",
+    "description": "商店页和个人主页摘要优先使用Steam官方API，失败时自动回退到网页解析。个人主页API摘要需要填写Steam Web API Key。",
+    "default": true
+  },
+  "steam_api_key": {
+    "type": "string",
+    "title": "Steam Web API Key",
+    "description": "可选。个人主页API摘要和好友状态解析需要填写；商店页API不需要填写。",
+    "uiType": "password",
+    "default": ""
+  },
+  "show_friends": {
+    "type": "bool",
+    "title": "解析好友在线概览",
+    "description": "个人主页解析时尝试通过 Steam Web API 获取公开好友列表中的在线/游戏中好友。需要填写 Steam Web API Key，且目标好友列表需公开。",
+    "default": false
+  },
+  "friends_status_limit": {
+    "type": "int",
+    "title": "好友状态展示上限",
+    "description": "好友在线概览最多展示多少位在线或游戏中的好友，建议范围 1-50。",
+    "default": 10
+  },
+  "show_price_history": {
+    "type": "bool",
+    "title": "解析价格史低",
+    "description": "商店页摘要中追加 IsThereAnyDeal 历史低价信息。需要填写 ITAD API Key；接口失败时会自动跳过。",
+    "default": false
+  },
+  "itad_api_key": {
+    "type": "string",
+    "title": "IsThereAnyDeal API Key",
+    "description": "可选。用于查询游戏历史低价和价格历史信息。",
+    "uiType": "password",
+    "default": ""
+  },
+  "itad_country": {
+    "type": "string",
+    "title": "ITAD价格地区",
+    "description": "IsThereAnyDeal 查询价格时使用的国家/地区代码，如 CN、US、JP。",
+    "default": "CN"
+  },
+  "price_current_limit": {
+    "type": "int",
+    "title": "当前低价展示数量",
+    "description": "展示 IsThereAnyDeal 当前多商店低价的数量，建议范围 1-10。",
+    "default": 3
+  },
+  "price_history_limit": {
+    "type": "int",
+    "title": "近期价格记录数量",
+    "description": "摘要详细程度为 detailed 时展示的近期 Steam 价格变动记录数量，建议范围 1-10。",
+    "default": 5
+  },
+  "return_screenshot": {
+    "type": "bool",
+    "title": "返回网页截图",
+    "description": "是否在摘要信息后附带网页截图。关闭后只解析文字，可明显减少耗时。",
+    "default": true
+  },
+  "screenshot_width": {
+    "type": "int",
+    "title": "截图宽度",
+    "description": "网页截图宽度，建议范围 800-2560。",
+    "default": 1440
+  },
+  "screenshot_max_height": {
+    "type": "int",
+    "title": "截图最大高度",
+    "description": "完整截图的最大高度，避免个人主页等超长页面生成过大的图片。",
+    "default": 20000
+  },
+  "screenshot_scroll_limit": {
+    "type": "int",
+    "title": "截图滚动次数上限",
+    "description": "触发懒加载时最多向下滚动的次数，避免无限加载页面卡住。",
+    "default": 15
+  },
+  "summary_detail_level": {
+    "type": "string",
+    "title": "摘要详细程度",
+    "description": "simple 只返回核心字段；standard/detailed 返回完整字段。",
+    "default": "standard",
+    "enum": [
+      "simple",
+      "standard",
+      "detailed"
+    ]
+  },
+  "cache_ttl_store": {
+    "type": "int",
+    "title": "商店摘要缓存秒数",
+    "description": "同一游戏商店摘要的内存缓存时间。0 表示禁用缓存。",
+    "default": 1800
+  },
+  "cache_ttl_profile": {
+    "type": "int",
+    "title": "个人主页摘要缓存秒数",
+    "description": "同一Steam个人主页摘要的内存缓存时间。0 表示禁用缓存。",
+    "default": 300
+  },
+  "cache_ttl_workshop": {
+    "type": "int",
+    "title": "创意工坊摘要缓存秒数",
+    "description": "同一创意工坊页面摘要的内存缓存时间。0 表示禁用缓存。",
+    "default": 600
   }
 }
