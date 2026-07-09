@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 
+from astrbot.api import logger
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -15,7 +16,8 @@ except Exception:
     ChromeType = None
 
 
-PLUGIN_DATA_DIR = "./data/plugins/astrbot_plugin_steamshot"
+DEFAULT_PLUGIN_DATA_DIR = "./data/plugins/astrbot_plugin_steamshot"
+PLUGIN_DATA_DIR = os.getenv("STEAMSHOT_DATA_DIR", DEFAULT_PLUGIN_DATA_DIR)
 RUNTIME_DIR = os.path.join(PLUGIN_DATA_DIR, "runtime")
 CHROMEDRIVER_PATH_FILE = os.path.join(RUNTIME_DIR, "chromedriver_path.txt")
 LEGACY_CHROMEDRIVER_PATH_FILE = "./chromedriver_path.txt"
@@ -26,6 +28,17 @@ ENV_BROWSER_KIND = "STEAMSHOT_BROWSER_KIND"
 ENV_SKIP_WDM = "STEAMSHOT_SKIP_WDM"
 
 VALID_BROWSER_KINDS = {"auto", "chrome", "chromium"}
+
+
+def set_data_dir(data_dir):
+    """运行时注入插件数据目录，避免依赖当前工作目录。"""
+    if not data_dir:
+        return
+
+    global PLUGIN_DATA_DIR, RUNTIME_DIR, CHROMEDRIVER_PATH_FILE
+    PLUGIN_DATA_DIR = os.path.abspath(os.fspath(data_dir))
+    RUNTIME_DIR = os.path.join(PLUGIN_DATA_DIR, "runtime")
+    CHROMEDRIVER_PATH_FILE = os.path.join(RUNTIME_DIR, "chromedriver_path.txt")
 
 
 def _is_windows():
@@ -140,16 +153,16 @@ def _write_cached_driver_path(driver_path):
         with open(CHROMEDRIVER_PATH_FILE, "w", encoding="utf-8") as f:
             f.write(driver_path)
     except Exception as e:
-        print(f"⚠️ 保存 ChromeDriver 缓存路径失败: {e}")
+        logger.warning(f"保存 ChromeDriver 缓存路径失败: {e}")
 
 
 def resolve_browser_binary():
     env_browser = os.getenv(ENV_BROWSER_BIN, "").strip()
     if env_browser:
         if os.path.exists(env_browser):
-            print(f"✅ 使用环境变量指定浏览器: {env_browser}")
+            logger.info(f"使用环境变量指定浏览器: {env_browser}")
             return env_browser
-        print(f"⚠️ 环境变量 {ENV_BROWSER_BIN} 指定路径不存在: {env_browser}")
+        logger.warning(f"环境变量 {ENV_BROWSER_BIN} 指定路径不存在: {env_browser}")
 
     browser_kind = _normalize_browser_kind(os.getenv(ENV_BROWSER_KIND))
     command_candidates = {
@@ -160,16 +173,16 @@ def resolve_browser_binary():
     for command in command_candidates[browser_kind]:
         resolved = shutil.which(command)
         if resolved:
-            print(f"✅ 检测到浏览器可执行文件: {resolved}")
+            logger.info(f"检测到浏览器可执行文件: {resolved}")
             return resolved
 
     if sys.platform == "darwin":
         mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         if os.path.exists(mac_chrome):
-            print(f"✅ 检测到浏览器可执行文件: {mac_chrome}")
+            logger.info(f"检测到浏览器可执行文件: {mac_chrome}")
             return mac_chrome
 
-    print("⚠️ 未检测到浏览器可执行文件，将使用 Selenium 默认浏览器解析策略")
+    logger.warning("未检测到浏览器可执行文件，将使用 Selenium 默认浏览器解析策略")
     return None
 
 
@@ -185,16 +198,16 @@ def _resolve_env_chromedriver():
     if not env_driver:
         return None
     if os.path.exists(env_driver):
-        print(f"✅ 使用环境变量指定驱动: {env_driver}")
+        logger.info(f"使用环境变量指定驱动: {env_driver}")
         return env_driver
-    print(f"⚠️ 环境变量 {ENV_CHROMEDRIVER_BIN} 指定路径不存在: {env_driver}")
+    logger.warning(f"环境变量 {ENV_CHROMEDRIVER_BIN} 指定路径不存在: {env_driver}")
     return None
 
 
 def _resolve_system_chromedriver():
     system_driver = shutil.which("chromedriver")
     if system_driver and os.path.exists(system_driver):
-        print(f"✅ 使用系统驱动: {system_driver}")
+        logger.info(f"使用系统驱动: {system_driver}")
         return system_driver
     return None
 
@@ -204,7 +217,7 @@ def _download_chromedriver(browser_kind):
     if skip_wdm:
         return None
 
-    print("⚠️ 未找到可用 ChromeDriver，开始使用 webdriver-manager 下载")
+    logger.warning("未找到可用 ChromeDriver，开始使用 webdriver-manager 下载")
     if browser_kind == "chromium" and ChromeType is not None:
         return ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
     return ChromeDriverManager().install()
@@ -220,7 +233,7 @@ def resolve_chromedriver_path(browser_binary=None):
             browser_kind = "chrome"
 
     browser_version = _resolve_browser_version(browser_binary)
-    print(f"🌐 检测到浏览器版本: {browser_version or '未知'}")
+    logger.info(f"检测到浏览器版本: {browser_version or '未知'}")
 
     env_driver = _resolve_env_chromedriver()
     if env_driver:
@@ -242,9 +255,9 @@ def resolve_chromedriver_path(browser_binary=None):
         checked.add(candidate)
         driver_version = _get_chromedriver_version(candidate)
         if _is_driver_compatible(browser_version, driver_version):
-            print(f"✅ 使用本地 ChromeDriver: {candidate} (版本: {driver_version or '未知'})")
+            logger.info(f"使用本地 ChromeDriver: {candidate} (版本: {driver_version or '未知'})")
             return candidate
-        print(
+        logger.warning(
             f"⚠️ 驱动版本可能不匹配，跳过: {candidate} "
             f"(浏览器: {browser_version or '未知'}, 驱动: {driver_version or '未知'})"
         )
@@ -252,15 +265,15 @@ def resolve_chromedriver_path(browser_binary=None):
     try:
         downloaded = _download_chromedriver(browser_kind)
         if downloaded:
-            print(f"✅ 已下载并缓存 ChromeDriver: {downloaded}")
+            logger.info(f"已下载并缓存 ChromeDriver: {downloaded}")
             _write_cached_driver_path(downloaded)
             return downloaded
     except Exception as e:
-        print(f"⚠️ webdriver-manager 下载失败: {e}")
+        logger.warning(f"webdriver-manager 下载失败: {e}")
 
     if driver_candidates:
         fallback = driver_candidates[0]
-        print(f"⚠️ 回退使用本地驱动: {fallback}")
+        logger.warning(f"回退使用本地驱动: {fallback}")
         return fallback
 
     raise RuntimeError(
@@ -274,18 +287,23 @@ def create_chrome_webdriver():
     chromedriver_path = resolve_chromedriver_path(browser_binary=browser_binary)
 
     options = Options()
+    options.page_load_strategy = "eager"
     options.add_argument("--headless")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-background-networking")
+    options.add_argument("--disable-sync")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-usb-device-detection")
+    options.add_argument("--lang=zh-CN")
     options.add_argument("--log-level=3")
     options.add_argument("--silent")
     options.add_experimental_option(
         "excludeSwitches",
         ["enable-logging", "enable-automation", "disable-usb", "enable-devtools"],
     )
+    options.add_experimental_option("prefs", {"intl.accept_languages": "zh-CN,zh;q=0.9"})
     if browser_binary:
         options.binary_location = browser_binary
 

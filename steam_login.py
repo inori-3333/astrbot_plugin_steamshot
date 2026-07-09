@@ -1,12 +1,16 @@
 import os
 import json
 import pickle
+import tempfile
 from datetime import datetime
 import re
+from astrbot.api import logger
 from .browser_runtime import create_chrome_webdriver
 
 # 存储目录和文件
-STEAM_AUTH_DIR = "./data/plugins/astrbot_plugin_steamshot/auth"
+DEFAULT_PLUGIN_DATA_DIR = "./data/plugins/astrbot_plugin_steamshot"
+PLUGIN_DATA_DIR = os.getenv("STEAMSHOT_DATA_DIR", DEFAULT_PLUGIN_DATA_DIR)
+STEAM_AUTH_DIR = os.path.join(PLUGIN_DATA_DIR, "auth")
 STEAM_COOKIES_JSON_FILE = os.path.join(STEAM_AUTH_DIR, "steam_cookies.json")
 
 # 兼容旧版文件路径 (用于迁移)
@@ -17,10 +21,84 @@ STEAM_LOGIN_CONFIG = os.path.join(STEAM_AUTH_DIR, "login_config.json")
 # 定义域名常量
 STEAM_STORE_DOMAIN = ".steampowered.com"
 STEAM_COMMUNITY_DOMAIN = ".steamcommunity.com"
+AUTH_DIR_MODE = 0o700
+COOKIE_FILE_MODE = 0o600
+
+
+def set_data_dir(data_dir):
+    """运行时注入插件数据目录，避免 cookie 文件落到错误工作目录。"""
+    if not data_dir:
+        return
+
+    global PLUGIN_DATA_DIR, STEAM_AUTH_DIR, STEAM_COOKIES_JSON_FILE
+    global STEAM_STORE_COOKIES_FILE, STEAM_COMMUNITY_COOKIES_FILE, STEAM_LOGIN_CONFIG
+
+    PLUGIN_DATA_DIR = os.path.abspath(os.fspath(data_dir))
+    STEAM_AUTH_DIR = os.path.join(PLUGIN_DATA_DIR, "auth")
+    STEAM_COOKIES_JSON_FILE = os.path.join(STEAM_AUTH_DIR, "steam_cookies.json")
+    STEAM_STORE_COOKIES_FILE = os.path.join(STEAM_AUTH_DIR, "steam_store_cookies.pkl")
+    STEAM_COMMUNITY_COOKIES_FILE = os.path.join(STEAM_AUTH_DIR, "steam_community_cookies.pkl")
+    STEAM_LOGIN_CONFIG = os.path.join(STEAM_AUTH_DIR, "login_config.json")
+
 
 def ensure_auth_dir():
     """确保认证目录存在"""
     os.makedirs(STEAM_AUTH_DIR, exist_ok=True)
+    restrict_path_permissions(STEAM_AUTH_DIR, is_dir=True)
+
+
+def restrict_path_permissions(path, is_dir=False):
+    """尽力收紧认证目录/文件权限，降低 cookies 被同机其他用户读取的风险。"""
+    if not path or not os.path.exists(path):
+        return
+    try:
+        mode = AUTH_DIR_MODE if is_dir else COOKIE_FILE_MODE
+        os.chmod(path, mode)
+    except Exception as e:
+        logger.warning(f"收紧 Steam 认证文件权限失败: {path}, {e}")
+
+
+def write_json_securely(path, data):
+    """原子写入 JSON，并在落盘前后收紧文件权限。"""
+    directory = os.path.dirname(path)
+    ensure_auth_dir()
+    fd = None
+    temp_path = None
+
+    try:
+        fd, temp_path = tempfile.mkstemp(
+            prefix=".steam_cookies_",
+            suffix=".tmp",
+            dir=directory,
+            text=True,
+        )
+        restrict_path_permissions(temp_path)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            fd = None
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+
+        restrict_path_permissions(temp_path)
+        os.replace(temp_path, path)
+        temp_path = None
+        restrict_path_permissions(path)
+        return True
+    except Exception as e:
+        logger.error(f"安全写入 cookies 数据失败: {e}")
+        return False
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as e:
+                logger.warning(f"清理临时 cookies 文件失败: {temp_path}, {e}")
 
 def migrate_from_pickle():
     """从旧版的pickle文件迁移到JSON格式"""
@@ -28,7 +106,7 @@ def migrate_from_pickle():
         os.path.exists(STEAM_STORE_COOKIES_FILE) or 
         os.path.exists(STEAM_COMMUNITY_COOKIES_FILE)
     ):
-        print("🔄 检测到旧版cookies文件，正在迁移到JSON格式...")
+        logger.info("检测到旧版 cookies 文件，正在迁移到 JSON 格式")
         cookies_data = {
             "store": {},
             "community": {},
@@ -45,29 +123,29 @@ def migrate_from_pickle():
                 with open(STEAM_LOGIN_CONFIG, "r", encoding="utf-8") as f:
                     cookies_data["config"] = json.load(f)
             except Exception as e:
-                print(f"⚠️ 迁移配置文件失败: {e}")
+                logger.warning(f"迁移配置文件失败: {e}")
         
         # 迁移商店cookies
         if os.path.exists(STEAM_STORE_COOKIES_FILE):
             try:
                 with open(STEAM_STORE_COOKIES_FILE, "rb") as f:
                     cookies_data["store"] = pickle.load(f)
-                print("✅ 商店cookies迁移成功")
+                logger.info("商店 cookies 迁移成功")
             except Exception as e:
-                print(f"⚠️ 商店cookies迁移失败: {e}")
+                logger.warning(f"商店 cookies 迁移失败: {e}")
         
         # 迁移社区cookies
         if os.path.exists(STEAM_COMMUNITY_COOKIES_FILE):
             try:
                 with open(STEAM_COMMUNITY_COOKIES_FILE, "rb") as f:
                     cookies_data["community"] = pickle.load(f)
-                print("✅ 社区cookies迁移成功")
+                logger.info("社区 cookies 迁移成功")
             except Exception as e:
-                print(f"⚠️ 社区cookies迁移失败: {e}")
+                logger.warning(f"社区 cookies 迁移失败: {e}")
         
         # 保存为JSON格式
         save_cookies_data(cookies_data)
-        print("✅ 迁移完成，数据已保存为JSON格式")
+        logger.info("迁移完成，数据已保存为 JSON 格式")
         
         # 可选：备份并删除旧文件
         try:
@@ -77,9 +155,9 @@ def migrate_from_pickle():
                 os.rename(STEAM_COMMUNITY_COOKIES_FILE, f"{STEAM_COMMUNITY_COOKIES_FILE}.bak")
             if os.path.exists(STEAM_LOGIN_CONFIG):
                 os.rename(STEAM_LOGIN_CONFIG, f"{STEAM_LOGIN_CONFIG}.bak")
-            print("✅ 旧文件已备份")
+            logger.info("旧 cookies 文件已备份")
         except Exception as e:
-            print(f"⚠️ 备份旧文件失败: {e}")
+            logger.warning(f"备份旧文件失败: {e}")
 
 def get_cookies_data():
     """获取所有cookie数据"""
@@ -101,10 +179,11 @@ def get_cookies_data():
         return default_data
     
     try:
+        restrict_path_permissions(STEAM_COOKIES_JSON_FILE)
         with open(STEAM_COOKIES_JSON_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"❌ 读取cookies数据失败: {e}")
+        logger.error(f"读取 cookies 数据失败: {e}")
         # 出错时返回默认数据
         return {
             "store": {},
@@ -118,14 +197,7 @@ def get_cookies_data():
 
 def save_cookies_data(data):
     """保存所有cookie数据"""
-    ensure_auth_dir()
-    try:
-        with open(STEAM_COOKIES_JSON_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        print(f"❌ 保存cookies数据失败: {e}")
-        return False
+    return write_json_securely(STEAM_COOKIES_JSON_FILE, data)
 
 def get_login_status():
     """获取当前登录状态配置"""
@@ -207,7 +279,7 @@ def save_steam_cookies(cookies_str, domain_type="store"):
                 steamid = match.group(1)
                 if steamid and 'steamid' not in cookies_dict:
                     cookies_dict['steamid'] = steamid
-                    print(f"✓ 从{domain_name} steamLoginSecure中提取到steamid: {steamid}")
+                    logger.info(f"从 {domain_name} steamLoginSecure 中提取到 steamid: {steamid}")
         
         # 获取当前数据并更新
         data = get_cookies_data()
@@ -232,7 +304,7 @@ def load_steam_cookies(domain_type="store"):
     - 字典形式的cookies或None
     """
     if domain_type not in ["store", "community"]:
-        print(f"❌ 不支持的域名类型: {domain_type}")
+        logger.error(f"不支持的域名类型: {domain_type}")
         return None
     
     data = get_cookies_data()
@@ -268,41 +340,61 @@ def apply_cookies_to_driver(driver, url=None):
     # 加载对应域名的cookies
     cookies = data.get(domain_type, {})
     if not cookies:
-        print(f"⚠️ 未找到 {domain_type} 域的cookies")
+        logger.warning(f"未找到 {domain_type} 域的 cookies")
         return False
     
     try:
-        # 需要先访问相应域名才能添加cookies
+        driver.execute_cdp_cmd("Network.enable", {})
+        cookies_added = 0
+        for name, value in cookies.items():
+            try:
+                result = driver.execute_cdp_cmd("Network.setCookie", {
+                    "name": name,
+                    "value": value,
+                    "domain": domain,
+                    "path": "/",
+                    "secure": True,
+                })
+                if result.get("success", False):
+                    cookies_added += 1
+                else:
+                    logger.warning(f"CDP 注入 {domain_type} cookie '{name}' 未返回成功")
+            except Exception as e:
+                logger.warning(f"CDP 注入 {domain_type} cookie '{name}' 失败: {e}")
+
+        logger.info(f"已通过 CDP 注入 {cookies_added} 个 {domain_type} cookies")
+        return cookies_added > 0
+    except Exception as e:
+        logger.warning(f"CDP 注入 Steam {domain_type} Cookie 失败，回退到 Selenium add_cookie: {e}")
+
+    try:
         initial_url = "https://store.steampowered.com" if domain_type == "store" else "https://steamcommunity.com"
         driver.get(initial_url)
-        
-        # 检查当前URL是否与预期域名匹配
+
         current_url = driver.current_url.lower()
         if (domain_type == "store" and "steampowered.com" not in current_url) or \
            (domain_type == "community" and "steamcommunity.com" not in current_url):
-            print(f"⚠️ 当前URL ({current_url}) 与目标域名 ({domain_type}) 不匹配")
+            logger.warning(f"当前URL ({current_url}) 与目标域名 ({domain_type}) 不匹配")
             return False
-        
-        # 添加cookies
+
         cookies_added = 0
         for name, value in cookies.items():
             try:
                 driver.add_cookie({
-                    'name': name,
-                    'value': value,
-                    'domain': domain
+                    "name": name,
+                    "value": value,
+                    "domain": domain,
+                    "path": "/",
+                    "secure": True,
                 })
                 cookies_added += 1
             except Exception as e:
-                # 如果某个cookie添加失败，记录但继续处理其他cookies
-                print(f"⚠️ 添加{domain_type} cookie '{name}'失败: {e}")
-        
-        # 刷新页面以应用cookies
-        driver.refresh()
-        print(f"✅ 已应用 {cookies_added} 个 {domain_type} cookies")
+                logger.warning(f"添加 {domain_type} cookie '{name}' 失败: {e}")
+
+        logger.info(f"已应用 {cookies_added} 个 {domain_type} cookies")
         return cookies_added > 0
     except Exception as e:
-        print(f"❌ 应用Steam {domain_type} Cookie失败: {e}")
+        logger.error(f"应用 Steam {domain_type} Cookie 失败: {e}")
         return False
 
 def get_cookie_status():
@@ -405,7 +497,7 @@ def verify_steam_login(driver, domain_type="store"):
                 username = account_menu.text.strip()
                 if username and username not in ["登录", "Sign In", "登入", "Connexion", "Anmelden"]:
                     return True, username
-        except:
+        except Exception:
             pass
         
         # 特定于商店页面的检查
@@ -428,10 +520,10 @@ def verify_steam_login(driver, domain_type="store"):
                                 name_element = driver.find_element(By.CLASS_NAME, "actual_persona_name")
                                 if name_element:
                                     return True, name_element.text.strip()
-                            except:
+                            except Exception:
                                 pass
                             return True, f"{domain_name}已登录 (未获取到用户名)"
-            except:
+            except Exception:
                 pass
         
         # 特定于社区页面的检查
@@ -444,7 +536,7 @@ def verify_steam_login(driver, domain_type="store"):
                     name_element = driver.find_element(By.CLASS_NAME, "actual_persona_name")
                     if name_element:
                         return True, name_element.text.strip()
-                except:
+                except Exception:
                     pass
             
             # 尝试从社区页面上找到个人资料链接
@@ -461,9 +553,9 @@ def verify_steam_login(driver, domain_type="store"):
                                 name_element = driver.find_element(By.CLASS_NAME, "actual_persona_name")
                                 if name_element:
                                     return True, name_element.text.strip()
-                            except:
+                            except Exception:
                                 pass
-            except:
+            except Exception:
                 pass
                 
             # 检查社区页面上的其他用户名指示器
@@ -473,7 +565,7 @@ def verify_steam_login(driver, domain_type="store"):
                     user_links = user_panel.find_elements(By.XPATH, ".//a[contains(@class, 'username')]")
                     if user_links and len(user_links) > 0:
                         return True, user_links[0].text.strip()
-            except:
+            except Exception:
                 pass
                 
             # 查找社区页面上的steamcommunity_header
@@ -483,7 +575,7 @@ def verify_steam_login(driver, domain_type="store"):
                     persona_links = header_element.find_elements(By.XPATH, ".//span[contains(@class, 'persona')]")
                     if persona_links and len(persona_links) > 0:
                         return True, persona_links[0].text.strip()
-            except:
+            except Exception:
                 pass
         
         # 通用方法: 检查是否有登出按钮
@@ -508,12 +600,12 @@ def verify_steam_login(driver, domain_type="store"):
                                     name_element = driver.find_element(By.CLASS_NAME, "actual_persona_name")
                                     if name_element:
                                         return True, name_element.text.strip()
-                                except:
+                                except Exception:
                                     pass
                         # 如果没有成功，但至少我们确认已登录
                         return True, f"{domain_name}已登录 (从steamLoginSecure确认)"
                 return True, f"{domain_name}已登录 (通过登出按钮确认)"
-        except:
+        except Exception:
             pass
         
         # 通用方法: 检查页面源代码中是否包含某些只有登录用户才会有的标记
@@ -538,14 +630,14 @@ def verify_steam_login(driver, domain_type="store"):
                     name_element = driver.find_element(By.CLASS_NAME, "actual_persona_name")
                     if name_element:
                         return True, name_element.text.strip()
-                except:
+                except Exception:
                     pass
                     
             return True, f"{domain_name}已登录 (通过页面源码确认)"
             
         return False, f"{domain_name}未登录"
     except Exception as e:
-        print(f"❌ 验证Steam {domain_name}登录状态失败: {e}")
+        logger.error(f"验证 Steam {domain_name} 登录状态失败: {e}")
         return False, f"{domain_name}验证失败: {str(e)}"
 
 async def test_steam_login():
@@ -633,5 +725,5 @@ def load_from_config(config):
         
         return True
     except Exception as e:
-        print(f"❌ 从配置加载Steam登录设置失败: {e}")
+        logger.error(f"从配置加载 Steam 登录设置失败: {e}")
         return False
