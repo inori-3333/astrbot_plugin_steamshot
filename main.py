@@ -798,7 +798,8 @@ async def process_steam_workshop(event, workshop_url, options=None):
                 parse_steam_workshop_soup,
                 options,
             )
-            set_cached_info("workshop", cache_key, workshop_info)
+            if options["cache_ttl_workshop"] > 0:
+                set_cached_info("workshop", cache_key, workshop_info)
         elif options["return_screenshot"]:
             logger.info(f"命中创意工坊信息缓存: {cache_key}")
             screenshot_ok = await capture_screenshot(workshop_url, screenshot_path, options)
